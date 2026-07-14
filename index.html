@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>游泳課堂智能排班系統</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <style>
+    :root {
+      --sys-bg: #f8fafc;
+      --sys-card: #ffffff;
+      --sys-text-primary: #0f172a;
+      --sys-text-secondary: #64748b;
+      --sys-accent: #007aff;
+      --sys-success: #10b981;
+      --sys-warning: #f59e0b;
+      --sys-danger: #ef4444;
+      --sys-border: #e2e8f0;
+      --font-stack: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body { font-family: var(--font-stack); background-color: var(--sys-bg); color: var(--sys-text-primary); overflow-x: hidden; padding-bottom: env(safe-area-inset-bottom); user-select: none; -webkit-tap-highlight-color: transparent; }
+    body.drag-locked { overflow: hidden !important; touch-action: none !important; }
+
+    /* 月曆 UI */
+    .cal-cell-box { min-height: 64px; border: 1px solid var(--sys-border); background: var(--sys-card); border-radius: 12px; padding: 6px; transition: all 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; flex-direction: column; justify-content: space-between; position: relative; overflow: hidden; }
+    .cal-cell-box:active { transform: scale(0.96); }
+    .cal-cell-box.drag-hover { border-color: var(--sys-accent) !important; background-color: #eff6ff !important; box-shadow: inset 0 0 0 2px var(--sys-accent) !important; transform: scale(1.02); z-index: 20; }
+    @media (min-width: 640px) { .cal-cell-box { min-height: 110px; padding: 8px; } }
+
+    /* 特殊樣式 */
+    .rest-day-pattern { background: repeating-linear-gradient(45deg, #fffbeb, #fffbeb 10px, #fef3c7 10px, #fef3c7 20px); border-color: #fde68a !important; }
+    .conflict-border { border: 2px dashed var(--sys-danger) !important; background-color: #fef2f2 !important; }
+    .drag-avatar { position: fixed; pointer-events: none; z-index: 9999; opacity: 0.95; transform: scale(1.05); box-shadow: 0 20px 40px rgba(0,0,0,0.15); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border: 1px solid var(--sys-accent); border-radius: 12px; }
+
+    /* 徽章與狀態點 */
+    .compact-badge { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--sys-border); border-radius: 6px; padding: 4px; font-size: 9px; font-weight: 700; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.02); transition: all 0.15s; }
+    .badge-paid { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
+    .badge-unpaid { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
+    .status-dot-paid { width: 6px; height: 6px; background-color: var(--sys-success); border-radius: 50%; box-shadow: 0 0 3px var(--sys-success); }
+    .status-dot-unpaid { width: 6px; height: 6px; background-color: var(--sys-warning); border-radius: 50%; box-shadow: 0 0 3px var(--sys-warning); }
+
+    /* 詳情頁明細卡片 */
+    .detail-sch-card { background: var(--sys-card); border: 1px solid var(--sys-border); border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); transition: all 0.2s; }
+    .detail-sch-card:hover { border-color: #cbd5e1; box-shadow: 0 6px 20px rgba(0,0,0,0.06); }
+    .dark-icon-btn { padding: 8px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; transition: all 0.2s; cursor: pointer; }
+    .dark-icon-btn:hover { background: #e2e8f0; }
+
+    .privacy-blurred { filter: blur(4px); transition: filter 0.2s; }
+    .safe-pb { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
+    
+    .avatar-gradient-0 { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+    .avatar-gradient-1 { background: linear-gradient(135deg, #10b981, #059669); }
+    .avatar-gradient-2 { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .avatar-gradient-3 { background: linear-gradient(135deg, #ef4444, #dc2626); }
+    .avatar-gradient-4 { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+
+    .cal-header-sticky { position: sticky; top: 63px; background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); z-index: 30; border-bottom: 1px solid var(--sys-border); }
+  </style>
+</head>
+<body class="safe-pb">
+
+  <header id="admin-header" class="bg-white/95 backdrop-blur-md border-b border-slate-200 sticky top-0 z-[50] h-16 flex items-center shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 w-full flex justify-between items-center">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-blue-50 text-blue-600 rounded-xl"><i data-lucide="calendar" class="w-5 h-5"></i></div>
+        <div><h1 class="text-sm font-black text-slate-800">游泳課堂智能排班系統</h1><p class="text-[9px] text-slate-400 font-bold uppercase tracking-widest">White Cupertinio · Cloud Sync</p></div>
+      </div>
+      <div class="flex items-center gap-1">
+        <button id="privacy-toggle-btn" onclick="window.controller.togglePrivacyMask()" class="p-2 rounded-xl text-slate-400 hover:bg-slate-50 transition-all" title="切換隱私遮罩"><i data-lucide="eye" id="privacy-icon" class="w-5 h-5"></i></button>
+        <button onclick="window.db.setTab('settings')" class="p-2 rounded-xl text-slate-400 hover:bg-slate-50 transition-all" title="系統設定"><i data-lucide="settings" class="w-5 h-5"></i></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-4 w-full" id="app-content"></main>
+
+  <nav id="admin-nav" class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-200 z-40 flex justify-around items-center h-[70px] pb-safe shadow-[0_-5px_20px_rgba(0,0,0,0.03)]">
+    <button onclick="window.db.setTab('calendar')" id="nav-btn-calendar" class="flex flex-col items-center justify-center w-20 h-full text-slate-400 hover:text-blue-600 transition-colors"><i data-lucide="calendar" class="w-5 h-5 mb-1"></i><span class="text-[10px] font-bold">預約課表</span></button>
+    <button onclick="window.db.setTab('dashboard')" id="nav-btn-dashboard" class="flex flex-col items-center justify-center w-20 h-full text-slate-400 hover:text-blue-600 transition-colors"><i data-lucide="trending-up" class="w-5 h-5 mb-1"></i><span class="text-[10px] font-bold">收款統計</span></button>
+    <button onclick="window.db.setTab('students')" id="nav-btn-students" class="flex flex-col items-center justify-center w-20 h-full text-slate-400 hover:text-blue-600 transition-colors"><i data-lucide="users" class="w-5 h-5 mb-1"></i><span class="text-[10px] font-bold">名冊維護</span></button>
+    <button onclick="window.db.setTab('settings')" id="nav-btn-settings" class="flex flex-col items-center justify-center w-20 h-full text-slate-400 hover:text-blue-600 transition-colors"><i data-lucide="cloud" class="w-5 h-5 mb-1"></i><span class="text-[10px] font-bold">雲端同步</span></button>
+  </nav>
+
+  <div id="modal-container"></div>
+  <div id="toast-container" class="fixed top-6 right-6 z-[130] flex flex-col gap-2.5 max-w-sm pointer-events-none"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Google API 憑證 (可自定義配置)
+    const GOOGLE_CLIENT_ID = "637904769497-jnvfvkt6jaoah0guad6sd50ptmdp8ah6.apps.googleusercontent.com"; 
+    const GOOGLE_API_KEY = "AIzaSyAND0ztqMRZtaOjWx105RFalDwJ-jgaGaY";   
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const IS_STUDENT_MODE = urlParams.get('mode') === 'student';
+    const STUDENT_SYNC_KEY = urlParams.get('key');
+    const TARGET_STUDENT_ID = urlParams.get('st');
+
+    const CONFIG = {
+      STORAGE_KEY: 'swim_v4_state',
+      POOLS: ["柴灣游泳池", "小西灣游泳池", "港島東游泳池", "維多利亞公園游泳池", "摩利臣山游泳池", "中山公園游泳池", "堅尼地城游泳池", "將軍澳游泳池", "荔枝角游泳池", "觀塘游泳池", "何文田游泳池", "大環山游泳池", "九龍公園游泳池"],
+      TIME_SHORTCUTS: ["09:00 - 10:00", "10:00 - 11:00", "14:00 - 15:00", "15:00 - 16:00", "16:00 - 17:00", "16:30 - 17:30", "17:00 - 18:00"],
+      HOURS: Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')),
+      MINS: ['00', '15', '30', '45']
+    };
+
+    const Utils = {
+      uuid: () => 'id_' + Math.random().toString(36).substr(2, 9),
+      getToday: () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; },
+      safeNum: (val) => { const n = parseFloat(val); return isNaN(n) ? 0 : n; },
+      showToast: (msg, type = 'info') => {
+        const c = document.getElementById('toast-container'); if (!c) return;
+        const el = document.createElement('div');
+        el.className = `p-4 rounded-2xl shadow-xl border bg-white/95 backdrop-blur-md flex items-center gap-3 pointer-events-auto transition-all duration-300 transform translate-y-2 opacity-0`;
+        el.style.borderLeft = `5px solid ${type === 'error' ? 'var(--sys-danger)' : type === 'success' ? 'var(--sys-success)' : '#007aff'}`;
+        el.innerHTML = `<span class="text-xs font-bold text-slate-800">${msg}</span>`;
+        c.appendChild(el);
+        setTimeout(() => el.classList.remove('translate-y-2', 'opacity-0'), 10);
+        setTimeout(() => { el.classList.add('translate-y-2', 'opacity-0'); setTimeout(() => el.remove(), 300); }, 3200);
+      },
+      loadScript: (src) => new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) return resolve();
+        const s = document.createElement('script'); s.src = src; s.onload = resolve; s.onerror = reject; document.head.appendChild(s);
+      }),
+      timeToMinutes: (t) => { if (!t || !t.includes(':')) return 0; const [h, m] = t.split(':').map(Number); return h * 60 + m; },
+      minutesToTime: (mins) => `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`,
+      isOverlapping: (slot1, slot2) => {
+        if (!slot1 || !slot2) return false;
+        const [s1, e1] = slot1.split(' - ').map(Utils.timeToMinutes), [s2, e2] = slot2.split(' - ').map(Utils.timeToMinutes);
+        return Math.max(s1, s2) < Math.min(e1, e2);
+      },
+      checkConflict: (date, timeSlot, excludeId = null) => {
+        if (window.db.state.coachRestDays.includes(date)) return true;
+        if (window.db.state.coachRestSlots.some(slot => slot.date === date && Utils.isOverlapping(slot.timeSlot, timeSlot))) return true;
+        return window.db.state.schedules.some(s => s.id !== excludeId && s.date === date && Utils.isOverlapping(s.timeSlot, timeSlot));
+      },
+      maskName: (name) => { if (!name) return ''; if (name.length <= 1) return name; if (name.length === 2) return name[0] + '*'; return name[0] + '*'.repeat(name.length - 2) + name[name.length - 1]; },
+      renderIcons: () => { try { if (typeof lucide !== 'undefined') lucide.createIcons(); } catch (e) {} },
+      getPoolTheme: (p) => {
+        const themes = [ { keyword: "柴灣", bg: "bg-sky-50 border-sky-200 text-sky-800" }, { keyword: "小西灣", bg: "bg-blue-50 border-blue-200 text-blue-800" }, { keyword: "港島東", bg: "bg-indigo-50 border-indigo-200 text-indigo-800" }, { keyword: "維多利亞", bg: "bg-emerald-50 border-emerald-200 text-emerald-800" }, { keyword: "摩利臣山", bg: "bg-amber-50 border-amber-200 text-amber-800" }, { keyword: "中山", bg: "bg-teal-50 border-teal-200 text-teal-800" }, { keyword: "堅尼地城", bg: "bg-cyan-50 border-cyan-200 text-cyan-800" }, { keyword: "將軍澳", bg: "bg-purple-50 border-purple-200 text-purple-800" }, { keyword: "荔枝角", bg: "bg-fuchsia-50 border-fuchsia-200 text-fuchsia-800" }, { keyword: "觀塘", bg: "bg-rose-50 border-rose-200 text-rose-800" }, { keyword: "何文田", bg: "bg-violet-50 border-violet-200 text-violet-800" }, { keyword: "九龍公園", bg: "bg-lime-50 border-lime-200 text-lime-800" } ];
+        return themes.find(t => p && p.includes(t.keyword)) || { bg: "bg-slate-50 border-slate-200 text-slate-700" };
+      },
+      buildTimeOptions: (selectedH, selectedM) => ({
+        h: CONFIG.HOURS.map(h => `<option value="${h}" ${h === selectedH ? 'selected' : ''}>${h} 時</option>`).join(''),
+        m: CONFIG.MINS.map(m => `<option value="${m}" ${m === selectedM ? 'selected' : ''}>${m} 分</option>`).join('')
+      })
+    };
+
+    class Database {
+      constructor() {
+        this.listeners = []; this.syncTimeout = null; this.lastLocalWrite = 0;
+        this.loadState();
+      }
+      loadState() {
+        try {
+          const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+          if (raw) {
+            this.state = JSON.parse(raw);
+            if (!this.state.dashboardSubTab) this.state.dashboardSubTab = 'monthly';
+            if (!this.state.syncKey) this.state.syncKey = 'swim-' + Math.random().toString(36).substr(2, 6);
+            if (this.state.isAutoSync === undefined) this.state.isAutoSync = false;
+            if (!this.state.coachRestSlots) this.state.coachRestSlots = [];
+            if (!this.state.coachPasscode) this.state.coachPasscode = '8888'; 
+            if (this.state.privacyMask === undefined) this.state.privacyMask = false;
+            if (this.state.googleConnected === undefined) this.state.googleConnected = false;
+            if (this.state.googleEmail === undefined) this.state.googleEmail = "";
+            if (this.state.selectedCalendarId === undefined) this.state.selectedCalendarId = 'primary';
+            if (!this.state.googleCalendars) this.state.googleCalendars = [];
+            this.state.studentSearchQuery = '';
+            if (IS_STUDENT_MODE) { this.state.activeTab = 'student_portal'; this.state.syncKey = STUDENT_SYNC_KEY; }
+            return;
+          }
+        } catch (e) {}
+
+        this.state = {
+          activeTab: IS_STUDENT_MODE ? 'student_portal' : 'calendar', dashboardSubTab: 'monthly', currYear: 2026, currMonth: 6, selDate: '2026-06-27', studentSearchQuery: '',
+          copySource: null, syncKey: IS_STUDENT_MODE ? STUDENT_SYNC_KEY : ('swim-' + Math.random().toString(36).substr(2, 6)), isAutoSync: IS_STUDENT_MODE, coachPasscode: '8888', googleConnected: false, googleEmail: "", selectedCalendarId: 'primary', googleCalendars: [],
+          students: [
+            { id: 'st_1', name: 'Angus 仔仔', defaultRate: 350, defaultPool: '小西灣游泳池' },
+            { id: 'st_2', name: '柏謙 & 浚謙', defaultRate: 500, defaultPool: '柴灣游泳池' },
+            { id: 'st_3', name: 'AIKO', defaultRate: 350, defaultPool: '荔枝角游泳池' }
+          ],
+          schedules: [
+            { id: 'sch_1', studentId: 'st_3', date: '2026-06-27', timeSlot: '10:30 - 11:30', pool: '荔枝角游泳池', amount: 350, paid: false, googleEventId: null },
+            { id: 'sch_2', studentId: 'st_1', date: '2026-06-29', timeSlot: '14:00 - 15:00', pool: '小西灣游泳池', amount: 350, paid: false, googleEventId: null }
+          ],
+          coachRestDays: ['2026-06-28'], coachRestSlots: [], recentCustomPools: [], privacyMask: false
+        };
+      }
+      save(isDataMutation = false) {
+        if (isDataMutation) this.lastLocalWrite = Date.now();
+        try { localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(this.state)); } catch (e) {}
+        this.notify();
+        if (isDataMutation) this.uploadToCloud();
+      }
+      subscribe(listener) { this.listeners.push(listener); }
+      notify() { this.listeners.forEach(fn => fn(this.state)); }
+      setTab(tab) { 
+        if (!IS_STUDENT_MODE && tab !== 'settings' && !sessionStorage.getItem('swim_admin_unlocked')) return window.controller.openPasscodeGateModal(); 
+        this.state.activeTab = tab; this.save(false); 
+      }
+      setDashboardSubTab(sub) { this.state.dashboardSubTab = sub; this.save(false); }
+      setDate(dateStr) { this.state.selDate = dateStr; this.save(false); }
+      goToday() { const todayStr = Utils.getToday(); const parts = todayStr.split('-'); this.state.currYear = parseInt(parts[0], 10); this.state.currMonth = parseInt(parts[1], 10); this.state.selDate = todayStr; this.save(false); Utils.showToast("已跳回今日！", "success"); }
+      prevMonth() { this.state.currMonth--; if (this.state.currMonth < 1) { this.state.currMonth = 12; this.state.currYear--; } this.save(false); }
+      nextMonth() { this.state.currMonth++; if (this.state.currMonth > 12) { this.state.currMonth = 1; this.state.currYear++; } this.save(false); }
+      getScheduleStudentName(sch) {
+        if (sch.isMerged && sch.mergedStudents) return sch.mergedStudents.map(ms => { const st = this.state.students.find(x => x.id === ms.studentId); return st ? st.name : '未知'; }).join(' + ');
+        const st = this.state.students.find(x => x.id === sch.studentId); return st ? st.name : '未知';
+      }
+      async moveSchedule(schId, targetDateStr) {
+        if (IS_STUDENT_MODE) return;
+        const sch = this.state.schedules.find(s => s.id === schId);
+        if (sch) {
+          if (Utils.checkConflict(targetDateStr, sch.timeSlot, schId)) return Utils.showToast("⚠️ 移動失敗：時段衝突！", "error");
+          sch.date = targetDateStr; this.save(true); Utils.showToast("課堂已更改日期！", "success");
+          if (this.state.googleConnected) await window.controller.syncEditToGoogle(sch);
+        }
+      }
+      toggleRestDay(dateStr) {
+        if (IS_STUDENT_MODE) return;
+        const idx = this.state.coachRestDays.indexOf(dateStr);
+        if (idx > -1) { this.state.coachRestDays.splice(idx, 1); Utils.showToast("已恢復本日排課！", "success"); } 
+        else { this.state.coachRestDays.push(dateStr); this.state.coachRestSlots = this.state.coachRestSlots.filter(s => s.date !== dateStr); Utils.showToast("☕ 本日已設為全日休息", "info"); }
+        this.save(true);
+      }
+      addRestSlot(date, timeSlot) { if (IS_STUDENT_MODE) return; this.state.coachRestSlots.push({ id: Utils.uuid(), date, timeSlot }); this.save(true); Utils.showToast("成功安排休息時段！", "success"); }
+      deleteRestSlot(id) { if (IS_STUDENT_MODE) return; this.state.coachRestSlots = this.state.coachRestSlots.filter(s => s.id !== id); this.save(true); Utils.showToast("已移除休息時段"); }
+      addStudent(name, rate, pool) { if (IS_STUDENT_MODE) return; this.state.students.push({ id: Utils.uuid(), name, defaultRate: Utils.safeNum(rate), defaultPool: pool || CONFIG.POOLS[0] }); this.save(true); Utils.showToast("學員新增成功！", "success"); }
+      editStudent(id, name, rate, pool) { if (IS_STUDENT_MODE) return; const st = this.state.students.find(s => s.id === id); if (st) { st.name = name; st.defaultRate = Utils.safeNum(rate); st.defaultPool = pool; this.save(true); Utils.showToast("學員更新成功！", "success"); } }
+      deleteStudent(id) { this.state.students = this.state.students.filter(s => s.id !== id); this.state.schedules = this.state.schedules.filter(s => s.studentId !== id); this.save(true); Utils.showToast("學員已刪除"); }
+      getPreviousMonthUnpaid(studentId, year, month) {
+        const prevPrefix = `${month === 1 ? year - 1 : year}-${String(month === 1 ? 12 : month - 1).padStart(2, '0')}`;
+        let unpaid = 0;
+        this.state.schedules.forEach(s => {
+          if (s.date.startsWith(prevPrefix) && !this.state.coachRestDays.includes(s.date)) {
+            if (s.isMerged && s.mergedStudents) { const mine = s.mergedStudents.find(ms => ms.studentId === studentId); if (mine && !mine.paid) unpaid += mine.amount; } 
+            else if (s.studentId === studentId && !s.paid) unpaid += s.amount;
+          }
+        });
+        return unpaid;
+      }
+      addSchedule(studentId, date, timeSlot, pool, amount, isMerged = false, mergedStudents = null) {
+        if (IS_STUDENT_MODE) return;
+        const newSch = { id: Utils.uuid(), studentId, date, timeSlot, pool, amount: Utils.safeNum(amount), paid: false, isMerged, mergedStudents, googleEventId: null };
+        this.state.schedules.push(newSch); this.save(true); Utils.showToast("預約安排成功！", "success");
+        if (this.state.googleConnected) window.controller.syncScheduleToGoogle(newSch);
+      }
+      togglePaid(schId, studentId = null) {
+        if (IS_STUDENT_MODE) return;
+        const sch = this.state.schedules.find(s => s.id === schId);
+        if (sch) {
+          if (sch.isMerged && sch.mergedStudents) {
+            if (studentId) { const ms = sch.mergedStudents.find(m => m.studentId === studentId); if (ms) ms.paid = !ms.paid; } 
+            else { const allPaid = sch.mergedStudents.every(m => m.paid); sch.mergedStudents.forEach(m => m.paid = !allPaid); }
+          } else sch.paid = !sch.paid;
+          this.save(true);
+        }
+      }
+      markStudentPaidForMonthAndPrevious(studentId, year, month) {
+        if (IS_STUDENT_MODE) return;
+        const currPrefix = `${year}-${String(month).padStart(2, '0')}`, prevPrefix = `${month === 1 ? year - 1 : year}-${String(month === 1 ? 12 : month - 1).padStart(2, '0')}`;
+        this.state.schedules.forEach(s => {
+          if (s.date.startsWith(currPrefix) || s.date.startsWith(prevPrefix)) {
+            if (s.isMerged && s.mergedStudents) { const mine = s.mergedStudents.find(ms => ms.studentId === studentId); if (mine) mine.paid = true; } 
+            else if (s.studentId === studentId) s.paid = true;
+          }
+        });
+        this.save(true); Utils.showToast("已結清該學員欠款！", "success");
+      }
+      async deleteSchedule(id) {
+        if (IS_STUDENT_MODE) return;
+        const sch = this.state.schedules.find(s => s.id === id);
+        if (sch && this.state.googleConnected) await window.controller.syncDeleteToGoogle(sch);
+        this.state.schedules = this.state.schedules.filter(s => s.id !== id); this.save(true); Utils.showToast("課堂已移除");
+      }
+      async exportData() {
+        const dataStr = JSON.stringify(this.state, null, 2); const fileName = `SwimAdmin_Backup_${Utils.getToday()}.json`;
+        if (window.showSaveFilePicker) {
+          try {
+            const handle = await window.showSaveFilePicker({ suggestedName: fileName, types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] });
+            const writable = await handle.createWritable(); await writable.write(dataStr); await writable.close(); return Utils.showToast('成功匯出備份！', 'success');
+          } catch (err) { if (err.name !== 'AbortError') this.fallbackDownload(dataStr, fileName); }
+        } else this.fallbackDownload(dataStr, fileName);
+      }
+      fallbackDownload(content, filename) {
+        const url = URL.createObjectURL(new Blob([content], { type: 'application/json' }));
+        const a = document.createElement('a'); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); Utils.showToast('備份下載成功！', 'success');
+      }
+      async uploadToCloud() {
+        if (IS_STUDENT_MODE || !this.state.syncKey || !this.state.isAutoSync || typeof window.firestore_push !== 'function') return;
+        if (this.syncTimeout) clearTimeout(this.syncTimeout);
+        this.syncTimeout = setTimeout(async () => { try { await window.firestore_push(); } catch (e) {} }, 1500);
+      }
+      async downloadFromCloud(customKey = null, silent = false) {
+        const key = customKey || this.state.syncKey; if (!key) return false;
+        if (typeof window.firestore_pull !== 'function') { if (!silent) Utils.showToast("雲端模組載入中...", "error"); return false; }
+        return await window.firestore_pull(key, silent);
+      }
+    }
+    
+    window.db = new Database();
+
+    class AppController {
+      constructor(store) {
+        this.store = store;
+        this.touchStartX = 0; this.touchStartY = 0; this.touchStartTimer = null; this.activeDragSchId = null; this.isDraggingActive = false;
+        this.addMode = 'single'; this.splitMode = 'total'; this.selectedMergedStudents = []; this.swipeStartX = null; this.swipeStartY = null;
+        this.tokenClient = null;
+        this.store.subscribe(() => this.render());
+        if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', () => this.init()); } else { this.init(); }
+      }
+
+      init() {
+        if (IS_STUDENT_MODE) {
+          const h = document.getElementById('admin-header'), n = document.getElementById('admin-nav');
+          if (h) h.style.display = 'none'; if (n) n.style.display = 'none';
+        }
+        this.initGoogleAuthSDK();
+        this.render();
+      }
+
+      closeModal() {
+        const m = document.getElementById('modal-container');
+        if (m) m.innerHTML = '';
+      }
+
+      executeDeleteStudent(id) { this.store.deleteStudent(id); this.closeModal(); this.render(); }
+      async executeDeleteSchedule(id) { await this.store.deleteSchedule(id); this.closeModal(); this.render(); }
+      
+      executeLoadDemo() {
+        this.store.state.students = [{ id: 'st_1', name: 'Angus 仔仔', defaultRate: 350, defaultPool: '小西灣游泳池' }, { id: 'st_2', name: '柏謙 & 浚謙', defaultRate: 500, defaultPool: '柴灣游泳池' }, { id: 'st_3', name: 'AIKO', defaultRate: 350, defaultPool: '荔枝角游泳池' }]; 
+        this.store.state.schedules = [{ id: 'sch_1', studentId: 'st_3', date: '2026-06-27', timeSlot: '10:30 - 11:30', pool: '荔枝角游泳池', amount: 350, paid: false, googleEventId: null }, { id: 'sch_2', studentId: 'st_1', date: '2026-06-29', timeSlot: '14:00 - 15:00', pool: '小西灣游泳池', amount: 350, paid: false, googleEventId: null }]; 
+        this.store.save(true); this.closeModal(); Utils.showToast("載入演示數據成功！", "success");
+      }
+      
+      executeClearDatabase() { 
+        this.store.state.students = []; 
+        this.store.state.schedules = []; 
+        this.store.state.coachRestDays = []; 
+        this.store.state.coachRestSlots = []; 
+        this.store.save(true); 
+        this.closeModal(); 
+        Utils.showToast("資料已完全抹除", "error"); 
+      }
+
+      quickSettleStudent(id) { this.store.markStudentPaidForMonthAndPrevious(id, this.store.state.currYear, this.store.state.currMonth); this.render(); }
+      setDashboardSubTab(sub) { this.store.setDashboardSubTab(sub); }
+      toggleSmsDrawer(studentId) { const drawer = document.getElementById(`sms-drawer-${studentId}`); if (drawer) drawer.classList.toggle('hidden'); }
+      
+      copySMS(studentId) {
+        const el = document.getElementById(`sms-${studentId}`);
+        if (el) {
+          const ta = document.createElement("textarea"); ta.value = el.innerText; ta.style.position = "fixed"; ta.style.opacity = "0";
+          document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+          Utils.showToast("簡訊範本複製成功！", "success");
+        }
+      }
+
+      openShareLinkModal(studentId) {
+        const student = this.store.state.students.find(s => s.id === studentId); if (!student) return;
+        const shareUrl = `${window.location.href.split('?')[0]}?mode=student&key=${encodeURIComponent(this.store.state.syncKey)}&st=${encodeURIComponent(studentId)}`;
+        const m = document.getElementById('modal-container');
+        if (m) {
+          m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative animate-in zoom-in-95"><div class="flex justify-between mb-4"><span class="font-black text-sm flex items-center gap-2"><i data-lucide="share-2" class="text-blue-600"></i> 家長專屬連結</span><button type="button" onclick="window.controller.closeModal()"><i data-lucide="x" class="text-slate-400"></i></button></div><p class="text-xs text-slate-500 mb-4">將專屬連結發送給家長。家長開啟後僅可查閱自己孩子的預約及學費明細，其餘時段將以「🔒 已預約」遮蔽。</p><textarea readonly id="share-link-input" class="w-full h-24 p-3 bg-slate-50 border rounded-xl text-xs font-black outline-none resize-none">${shareUrl}</textarea><div class="flex gap-3 mt-4"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs">關閉</button><button type="button" onclick="window.controller.copyShareLinkToClipboard()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs">複製連結</button></div></div></div>`;
+          Utils.renderIcons();
+        }
+      }
+
+      copyShareLinkToClipboard() { const el = document.getElementById('share-link-input'); if (el) { el.select(); document.execCommand('copy'); Utils.showToast("🔗 連結複製成功！", "success"); } }
+      generateNewKey() { const newKey = 'swim-' + Math.random().toString(36).substr(2, 6); const input = document.getElementById('fs-synckey'); if (input) input.value = newKey; this.store.state.syncKey = newKey; this.store.save(false); Utils.showToast("同步密鑰已更新！", "success"); }
+      toggleAutoSync(checked) { this.store.state.isAutoSync = checked; this.store.save(false); if (checked) this.store.uploadToCloud(); }
+      async testAndPullCloud() { const inputKey = document.getElementById('fs-synckey')?.value.trim(); if (!inputKey) return Utils.showToast("請輸入同步密鑰", "error"); Utils.showToast("連線拉取雲端備份...", "info"); const success = await this.store.downloadFromCloud(inputKey); if (success) Utils.showToast("同步拉取成功！", "success"); else Utils.showToast("無此密鑰備份或連線失敗", "error"); }
+      forcePushCloud() { const inputKey = document.getElementById('fs-synckey')?.value.trim(); if (!inputKey) return Utils.showToast("請輸入同步密鑰", "error"); this.store.state.syncKey = inputKey; this.store.state.isAutoSync = true; this.store.save(true); Utils.showToast("強制上傳中...", "info"); this.store.uploadToCloud(); }
+      
+      importBackup(input) { 
+        const file = input.files[0]; if (!file) return; 
+        const reader = new FileReader(); 
+        reader.onload = (e) => { 
+            try { 
+                const raw = JSON.parse(e.target.result); 
+                if (raw && (raw.students || raw.schedules)) { 
+                    Object.assign(this.store.state, raw); 
+                    this.store.save(true); 
+                    Utils.showToast("備份檔匯入還原成功！", "success"); 
+                    this.render(); 
+                } else {
+                    Utils.showToast("格式不符！", "error"); 
+                }
+            } catch (err) { 
+                Utils.showToast("檔案錯誤！", "error"); 
+            } 
+            input.value=''; 
+        }; 
+        reader.readAsText(file); 
+      }
+
+      loadDemoData() { const m = document.getElementById('modal-container'); if (m) { m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-5 shadow-2xl text-center"><i data-lucide="sparkles" class="w-12 h-12 text-blue-500 mx-auto mb-3"></i><h3 class="font-bold text-sm mb-2">載入測試數據？</h3><p class="text-xs text-slate-500 mb-6">將覆蓋目前資料，確認載入？</p><div class="flex gap-2"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeLoadDemo()" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold">確認</button></div></div></div>`; Utils.renderIcons(); } }
+      clearDatabaseConfirm() { const m = document.getElementById('modal-container'); if (m) { m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-5 shadow-2xl text-center"><i data-lucide="alert-triangle" class="w-12 h-12 text-rose-500 mx-auto mb-3"></i><h3 class="font-bold text-sm mb-2">確認抹除所有資料？</h3><div class="flex gap-2 mt-4"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeClearDatabase()" class="flex-1 py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold">抹除</button></div></div></div>`; Utils.renderIcons(); } }
+      selectGoogleCalendar(id) { this.store.state.selectedCalendarId = id; this.store.save(false); Utils.showToast("已更新同步目標日曆！", "success"); }
+
+      initGoogleAuthSDK() {
+        if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")) return;
+        try {
+          this.tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID, scope: 'https://www.googleapis.com/auth/calendar',
+            callback: async (resp) => {
+              if (resp.error) return Utils.showToast("Google 授權失敗", "error");
+              localStorage.setItem('swim_google_token', resp.access_token); localStorage.setItem('swim_google_token_expiry', Date.now() + (resp.expires_in * 1000));
+              this.store.state.googleConnected = true; await this.fetchGoogleUserProfile(resp.access_token); await this.fetchGoogleCalendars(resp.access_token);
+              this.store.save(false); this.render(); Utils.showToast("🔓 Google 日曆同步啟用！", "success");
+            }
+          });
+        } catch (e) {}
+      }
+      async fetchGoogleUserProfile(token) {
+        try { const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { 'Authorization': `Bearer ${token}` } }); if (res.ok) { const data = await res.json(); this.store.state.googleEmail = data.email || "已授權帳號"; } } catch (e) {}
+      }
+      async fetchGoogleCalendars(token) {
+        try {
+          const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', { headers: { 'Authorization': `Bearer ${token}` } });
+          if (res.ok) {
+            const data = await res.json();
+            this.store.state.googleCalendars = data.items.map(c => ({ id: c.id, summary: c.summary, primary: c.primary }));
+            if (!this.store.state.selectedCalendarId && data.items.length > 0) {
+              this.store.state.selectedCalendarId = data.items.find(c => c.primary)?.id || 'primary';
+            }
+          }
+        } catch (e) {}
+      }
+      async getValidGoogleToken() {
+        const token = localStorage.getItem('swim_google_token'), expiry = parseInt(localStorage.getItem('swim_google_token_expiry') || '0', 10);
+        if (token && Date.now() < (expiry - 60000)) return token;
+        return new Promise((resolve) => {
+          if (!this.tokenClient) return resolve(null);
+          this.tokenClient.callback = (resp) => {
+            if (resp.error) return resolve(null);
+            localStorage.setItem('swim_google_token', resp.access_token); localStorage.setItem('swim_google_token_expiry', Date.now() + (resp.expires_in * 1000)); resolve(resp.access_token);
+          };
+          this.tokenClient.requestAccessToken({ prompt: '' });
+        });
+      }
+      toggleGoogleCalendarConnection() {
+        if (this.store.state.googleConnected) {
+          localStorage.removeItem('swim_google_token'); localStorage.removeItem('swim_google_token_expiry');
+          this.store.state.googleConnected = false; this.store.state.googleEmail = ""; this.store.state.googleCalendars = []; this.store.save(false); Utils.showToast("已斷開 Google 日曆。"); this.render();
+        } else {
+          if (!this.tokenClient) return Utils.showToast("請填寫 GOOGLE_CLIENT_ID", "error");
+          this.tokenClient.requestAccessToken({ prompt: 'consent' });
+        }
+      }
+      async syncScheduleToGoogle(sch) {
+        const token = await this.getValidGoogleToken(); if (!token) return;
+        const [start, end] = sch.timeSlot.split(' - ');
+        const calId = encodeURIComponent(this.store.state.selectedCalendarId || 'primary');
+        try {
+          const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events`, {
+            method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ summary: `🏊 游泳課: ${this.store.getScheduleStudentName(sch)}`, location: sch.pool, description: `費用: $${sch.amount} HKD`, start: { dateTime: `${sch.date}T${start}:00+08:00`, timeZone: "Asia/Hong_Kong" }, end: { dateTime: `${sch.date}T${end}:00+08:00`, timeZone: "Asia/Hong_Kong" } })
+          });
+          if (res.ok) { sch.googleEventId = (await res.json()).id; this.store.save(false); }
+        } catch (e) {}
+      }
+      async syncEditToGoogle(sch) {
+        if (!sch.googleEventId) return this.syncScheduleToGoogle(sch);
+        const token = await this.getValidGoogleToken(); if (!token) return;
+        const [start, end] = sch.timeSlot.split(' - ');
+        const calId = encodeURIComponent(this.store.state.selectedCalendarId || 'primary');
+        try {
+          await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${sch.googleEventId}`, {
+            method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ summary: `🏊 游泳課: ${this.store.getScheduleStudentName(sch)}`, location: sch.pool, description: `費用: $${sch.amount} HKD`, start: { dateTime: `${sch.date}T${start}:00+08:00`, timeZone: "Asia/Hong_Kong" }, end: { dateTime: `${sch.date}T${end}:00+08:00`, timeZone: "Asia/Hong_Kong" } })
+          });
+        } catch (e) {}
+      }
+      async syncDeleteToGoogle(sch) {
+        const token = await this.getValidGoogleToken(); if (!token || !sch.googleEventId) return;
+        const calId = encodeURIComponent(this.store.state.selectedCalendarId || 'primary');
+        try { await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${sch.googleEventId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); } catch (e) {}
+      }
+
+      async syncAllExistingToGoogle() {
+        const token = await this.getValidGoogleToken(); 
+        if (!token) return Utils.showToast("請先連結 Google 帳號！", "error");
+        
+        Utils.showToast("開始批次同步並轉移課堂...", "info"); 
+        let count = 0;
+        const calId = encodeURIComponent(this.store.state.selectedCalendarId || 'primary');
+        
+        for (let sch of this.store.state.schedules) {
+          const [start, end] = sch.timeSlot.split(' - ');
+          const eventBody = { 
+            summary: `🏊 游泳課: ${this.store.getScheduleStudentName(sch)}`, 
+            location: sch.pool, 
+            description: `費用: $${sch.amount} HKD`, 
+            start: { dateTime: `${sch.date}T${start}:00+08:00`, timeZone: "Asia/Hong_Kong" }, 
+            end: { dateTime: `${sch.date}T${end}:00+08:00`, timeZone: "Asia/Hong_Kong" } 
+          };
+
+          if (sch.googleEventId) {
+            try {
+              const updateRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${sch.googleEventId}`, {
+                method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(eventBody)
+              });
+              
+              if (updateRes.ok) { count++; continue; }
+              
+              if (updateRes.status === 404) {
+                 const createRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events`, {
+                    method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(eventBody)
+                 });
+                 if (createRes.ok) { sch.googleEventId = (await createRes.json()).id; count++; }
+              }
+            } catch (e) { console.warn('Update or Transfer failed:', e); }
+          } else {
+            try {
+              const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events`, {
+                method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(eventBody)
+              });
+              if (res.ok) { sch.googleEventId = (await res.json()).id; count++; }
+            } catch (e) {}
+          }
+        }
+        
+        if (count > 0) { 
+          this.store.save(true); Utils.showToast(`🎉 成功同步或轉移了 ${count} 堂課！`, "success"); 
+        } else {
+          Utils.showToast("所有課堂皆已在目標日曆中！", "info");
+        }
+      }
+
+      togglePrivacyMask() { this.store.state.privacyMask = !this.store.state.privacyMask; this.store.save(false); }
+      updateStudentSearch(val) { this.store.state.studentSearchQuery = val; this.store.save(false); }
+      
+      handleSwipeStart(e) { this.swipeStartX = e.touches[0].clientX; this.swipeStartY = e.touches[0].clientY; }
+      handleSwipeEnd(e) {
+        if (!this.swipeStartX) return; const dx = e.changedTouches[0].clientX - this.swipeStartX, dy = e.changedTouches[0].clientY - this.swipeStartY;
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) dx > 0 ? this.store.prevMonth() : this.store.nextMonth();
+        this.swipeStartX = null; this.swipeStartY = null;
+      }
+      openAddScheduleModalWithTime(dateStr, startTime, endTime) {
+        this.store.setDate(dateStr); this.openAddScheduleModal();
+        setTimeout(() => {
+          if (startTime && endTime) {
+            document.getElementById('f-start-h').value = startTime.split(':')[0]; document.getElementById('f-start-m').value = startTime.split(':')[1];
+            document.getElementById('f-end-h').value = endTime.split(':')[0]; document.getElementById('f-end-m').value = endTime.split(':')[1];
+            this.recalculateMergedFee();
+          }
+        }, 50);
+      }
+
+      buildStudentsView() {
+        const { students, studentSearchQuery, schedules, currYear, currMonth, coachRestDays, privacyMask } = this.store.state;
+        const currentMonthPrefix = `${currYear}-${String(currMonth).padStart(2, '0')}`;
+        const filteredStudents = students.filter(st => !studentSearchQuery || st.name.toLowerCase().includes(studentSearchQuery.toLowerCase()));
+        
+        const listHTML = filteredStudents.map((st, i) => {
+          const stSch = schedules.filter(s => s.date.startsWith(currentMonthPrefix) && !coachRestDays.includes(s.date) && (s.studentId === st.id || (s.isMerged && s.mergedStudents && s.mergedStudents.some(ms=>ms.studentId===st.id))));
+          const mFee = stSch.reduce((sum, s) => { if(s.isMerged){const mine = s.mergedStudents.find(m=>m.studentId===st.id); return sum+(mine?mine.amount:0);} return sum+s.amount; }, 0);
+          return `<div class="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm"><div class="flex items-start gap-4"><div class="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-lg avatar-gradient-${i%5}">${st.name[0]}</div><div><div class="font-extrabold text-base">${privacyMask?Utils.maskName(st.name):st.name}</div><div class="text-xs text-slate-400 mt-1">${st.defaultPool}</div></div></div><div class="bg-slate-50 rounded-2xl p-3 my-4 space-y-1"><div class="flex justify-between text-xs font-bold"><span class="text-slate-400">標準費率:</span><span>$${st.defaultRate}</span></div><div class="flex justify-between text-xs font-bold"><span class="text-slate-400">當月已上:</span><span class="text-blue-600">${stSch.length} 堂課</span></div><div class="flex justify-between text-xs font-bold"><span class="text-slate-400">當月應繳:</span><span class="text-slate-700">$${mFee}</span></div></div><div class="flex gap-2 border-t pt-2"><button type="button" onclick="window.controller.openShareLinkModal('${st.id}')" class="flex-1 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-black">分享</button><button type="button" onclick="window.controller.openEditStudentModal('${st.id}')" class="py-2 px-3 bg-slate-50 text-slate-600 rounded-xl"><i data-lucide="edit-2" class="w-3.5 h-3.5"></i></button><button type="button" onclick="window.controller.openDeleteStudentConfirm('${st.id}')" class="py-2 px-3 bg-rose-50 text-rose-600 rounded-xl"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button></div></div>`;
+        }).join('') || '<div class="col-span-full text-center py-12 text-slate-400">無資料</div>';
+
+        return `<div class="max-w-5xl mx-auto flex flex-col gap-6"><div class="bg-white rounded-3xl p-6 shadow-sm flex flex-col md:flex-row gap-4"><input type="text" placeholder="搜尋..." value="${studentSearchQuery}" oninput="window.controller.updateStudentSearch(this.value)" class="flex-grow p-3 bg-slate-50 border rounded-2xl text-xs font-bold outline-none"><button type="button" onclick="window.controller.openAddStudentModal()" class="px-5 py-3 bg-blue-600 text-white rounded-2xl text-xs font-black">新增學員</button></div><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">${listHTML}</div></div>`;
+      }
+
+      updateCoachPasscode() {
+        const val = document.getElementById('coach-passcode-field')?.value.trim();
+        if (!val || val.length < 4) return Utils.showToast("⚠️ 密碼請至少設定 4 位數字！", "error");
+        this.store.state.coachPasscode = val;
+        this.store.save(true);
+        Utils.showToast("🔑 安全解鎖密碼更新成功！", "success");
+      }
+
+      buildSettingsView() {
+        const { syncKey, isAutoSync, coachPasscode, googleEmail, googleConnected, selectedCalendarId, googleCalendars } = this.store.state;
+        const calOptions = googleCalendars?.map(c => `<option value="${c.id}" ${selectedCalendarId === c.id ? 'selected' : ''}>${c.summary} ${c.primary ? '(主日曆)' : ''}</option>`).join('') || `<option value="primary">主日曆 (Primary)</option>`;
+
+        return `<div class="max-w-xl mx-auto space-y-6 animate-in fade-in">
+          <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100"><h2 class="font-black flex items-center gap-2 mb-4"><i data-lucide="calendar-check" class="text-emerald-500"></i>Google 日曆即時同步</h2>
+            <div class="flex justify-between items-center bg-slate-50 p-4 rounded-xl mb-4"><span class="text-xs font-bold">${googleConnected ? '🟢 已連結: '+googleEmail : '🔴 未授權'}</span><button type="button" onclick="window.controller.toggleGoogleCalendarConnection()" class="px-4 py-2 border rounded-xl text-xs font-black bg-white">${googleConnected?'中斷':'連結 Google'}</button></div>
+            ${googleConnected ? `<div class="mb-4"><span class="text-[10px] font-bold text-slate-400 block mb-1">選擇課堂同步的目標日曆</span><select onchange="window.controller.selectGoogleCalendar(this.value)" class="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold outline-none">${calOptions}</select></div>` : ''}
+            <button type="button" onclick="window.controller.syncAllExistingToGoogle()" class="w-full mt-2 py-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-black hover:bg-emerald-100 transition-all">一鍵同步現有課堂</button></div>
+          <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100"><h2 class="font-black flex items-center gap-2 mb-4"><i data-lucide="lock" class="text-blue-600"></i>後台安全解鎖密碼</h2>
+            <div class="flex items-center justify-between mb-2"><input type="password" id="coach-passcode-field" value="${coachPasscode || '8888'}" inputmode="numeric" pattern="[0-9]*" placeholder="請輸入純數字密碼" class="p-3 bg-slate-50 border rounded-xl text-xs font-black flex-grow mr-2 outline-none"><button type="button" onclick="window.controller.updateCoachPasscode()" class="px-4 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md">儲存</button></div></div>
+          <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100"><h2 class="font-black flex items-center gap-2 mb-4"><i data-lucide="printer" class="text-blue-600"></i>報表匯出</h2>
+            <div class="flex gap-4"><button type="button" onclick="window.controller.exportReportPDF('monthly')" class="flex-1 p-4 bg-slate-50 rounded-xl text-xs font-bold text-center hover:bg-slate-100 transition-all">本月對帳 PDF</button><button type="button" onclick="window.controller.exportReportPDF('annual')" class="flex-1 p-4 bg-slate-50 rounded-xl text-xs font-bold text-center hover:bg-slate-100 transition-all">年度分析 PDF</button></div></div>
+          <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100"><h2 class="font-black flex items-center gap-2 mb-4"><i data-lucide="cloud" class="text-blue-600"></i>Firebase 雲端同步</h2>
+            <div class="flex items-center justify-between mb-4"><input type="text" id="fs-synckey" value="${syncKey}" class="p-3 bg-slate-50 border rounded-xl text-xs font-black flex-grow mr-2 outline-none"><button type="button" onclick="window.controller.generateNewKey()" class="px-4 py-3 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">產生</button></div>
+            <div class="flex items-center justify-between p-4 bg-slate-50 border rounded-xl mb-4"><div><span class="text-xs font-black text-slate-700 block">背景自動同步</span><span class="text-[10px] text-slate-400 block mt-0.5">即時上傳變更</span></div><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" class="sr-only peer" ${isAutoSync ? 'checked' : ''} onchange="window.controller.toggleAutoSync(this.checked)"><div class="w-11 h-6 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div></label></div>
+            <div class="flex gap-3"><button type="button" onclick="window.controller.testAndPullCloud()" class="flex-1 py-3 bg-blue-50 text-blue-700 rounded-xl text-xs font-black hover:bg-blue-100 transition-all"><i data-lucide="download-cloud" class="w-4 h-4 inline mr-1"></i>強制下載</button><button type="button" onclick="window.controller.forcePushCloud()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl text-xs font-black shadow-md hover:bg-blue-700 transition-all"><i data-lucide="upload-cloud" class="w-4 h-4 inline mr-1"></i>強制上傳</button></div></div>
+          <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100"><h2 class="font-black flex items-center gap-2 mb-4"><i data-lucide="database" class="text-slate-600"></i>本地手動備份 (JSON)</h2>
+            <div class="flex gap-3"><button type="button" onclick="window.db.exportData()" class="flex-1 py-3 bg-slate-900 text-white rounded-xl text-xs font-bold">下載存檔</button><label class="flex-1 py-3 bg-white border border-slate-200 text-slate-700 text-center rounded-xl text-xs font-bold cursor-pointer hover:bg-slate-50">還原存檔<input type="file" accept=".json" onchange="window.controller.importBackup(this)" class="hidden"></label></div></div>
+          <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100"><h2 class="font-black mb-2">沙盒維護與演示</h2><div class="flex gap-2"><button type="button" onclick="window.controller.loadDemoData()" class="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold">載入測試數據</button><button type="button" onclick="window.controller.clearDatabaseConfirm()" class="flex-1 py-3 bg-rose-50 text-rose-600 rounded-xl text-xs font-bold">抹除資料庫</button></div></div>
+        </div>`;
+      }
+
+      openAddStudentModal() {
+        const pOpts = CONFIG.POOLS.map(p => `<option value="${p}">${p}</option>`).join('');
+        const m = document.getElementById('modal-container');
+        if (m) {
+          m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl"><h3 class="font-extrabold mb-4">新增學員</h3><div class="space-y-4"><input type="text" id="fs-name" placeholder="姓名" class="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"><input type="number" id="fs-rate" value="350" class="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"><select id="fs-pool" class="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold">${pOpts}</select><div class="flex gap-3"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.submitStudent()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold">儲存</button></div></div></div></div>`;
+          Utils.renderIcons();
+        }
+      }
+
+      submitStudent() { const n = document.getElementById('fs-name').value; if(n){ this.store.addStudent(n, document.getElementById('fs-rate').value, document.getElementById('fs-pool').value); this.closeModal(); this.render(); } else { Utils.showToast('學員姓名不得為空', 'error'); } }
+
+      openEditStudentModal(id) {
+        const st = this.store.state.students.find(s => s.id === id); if (!st) return;
+        const pOpts = CONFIG.POOLS.map(p => `<option value="${p}" ${p===st.defaultPool?'selected':''}>${p}</option>`).join('');
+        const m = document.getElementById('modal-container');
+        if (m) {
+          m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl"><h3 class="font-extrabold mb-4">編輯學員</h3><div class="space-y-4"><input type="text" id="fe-name" value="${st.name}" class="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"><input type="number" id="fe-rate" value="${st.defaultRate}" class="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold"><select id="fe-pool" class="w-full p-3 bg-slate-50 border rounded-xl text-xs font-bold">${pOpts}</select><div class="flex gap-3"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.submitEditStudent('${id}')" class="flex-1 py-3 bg-blue-600 text-white rounded-xl text-xs font-bold">儲存</button></div></div></div></div>`;
+          Utils.renderIcons();
+        }
+      }
+
+      submitEditStudent(id) { const n = document.getElementById('fe-name').value; if(n){ this.store.editStudent(id, n, document.getElementById('fe-rate').value, document.getElementById('fe-pool').value); this.closeModal(); this.render(); } else { Utils.showToast('學員姓名不得為空', 'error'); } }
+
+      openDeleteStudentConfirm(id) { 
+        const m = document.getElementById('modal-container');
+        if (m) { m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-6 shadow-2xl text-center"><h3 class="font-bold text-sm mb-4">確定刪除學員？</h3><div class="flex gap-3"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeDeleteStudent('${id}')" class="flex-1 py-3 bg-rose-600 text-white rounded-xl text-xs font-bold">刪除</button></div></div></div>`; Utils.renderIcons(); } 
+      }
+      
+      openDeleteScheduleConfirm(id) { 
+        const m = document.getElementById('modal-container');
+        if (m) { m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-6 shadow-2xl text-center"><h3 class="font-bold text-sm mb-4">確定移除此課堂？</h3><div class="flex gap-3"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeDeleteSchedule('${id}')" class="flex-1 py-3 bg-rose-600 text-white rounded-xl text-xs font-bold">刪除</button></div></div></div>`; Utils.renderIcons(); } 
+      }
+
+      async exportReportPDF(reportType) {
+        const hud = document.createElement('div');
+        hud.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;color:white;font-family:system-ui;';
+        hud.innerHTML = `<div class="text-center"><i data-lucide="sparkles" class="w-8 h-8 mb-4 mx-auto animate-spin"></i><div class="font-black tracking-wider">編譯高清 PDF 中...</div></div>`;
+        document.body.appendChild(hud); Utils.renderIcons();
+
+        try {
+          await Utils.loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+          await Utils.loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+          
+          const { currYear, currMonth, students, schedules, coachRestDays, privacyMask } = this.store.state;
+          const sandbox = document.createElement('div'); 
+          sandbox.style.cssText = 'position:absolute;top:0;left:0;width:794px;height:1123px;z-index:-1000;background:#fff;padding:40px;box-sizing:border-box;font-family:-apple-system,sans-serif;';
+          document.body.appendChild(sandbox);
+
+          const isM = reportType === 'monthly';
+          const title = isM ? '游泳課堂月度財政對帳單' : `${currYear} 年度營收分析報告`;
+          const badge = isM ? 'SwimAdmin Standard Statement' : 'Annual Intelligence Report';
+
+          let contentHtml = '';
+          if (isM) {
+            const mSch = schedules.filter(s => s.date.startsWith(`${currYear}-${String(currMonth).padStart(2, '0')}`) && !coachRestDays.includes(s.date));
+            let tR=0, pR=0, uR=0;
+            mSch.forEach(s => { if(s.isMerged)s.mergedStudents.forEach(ms=>{tR+=ms.amount;ms.paid?pR+=ms.amount:uR+=ms.amount;}); else {tR+=s.amount;s.paid?pR+=s.amount:uR+=s.amount;} });
+            let tPrev=0; students.forEach(st => { if(mSch.some(s=>s.studentId===st.id||(s.isMerged&&s.mergedStudents.some(ms=>ms.studentId===st.id)))) tPrev+=this.store.getPreviousMonthUnpaid(st.id, currYear, currMonth); });
+            const tableRows = students.map(st => {
+              const sch = mSch.filter(s=>s.studentId===st.id||(s.isMerged&&s.mergedStudents.some(ms=>ms.studentId===st.id))); if(!sch.length) return '';
+              const sT = sch.reduce((sum,s) => sum+(s.isMerged?s.mergedStudents.find(m=>m.studentId===st.id).amount:s.amount), 0);
+              const pU = this.store.getPreviousMonthUnpaid(st.id, currYear, currMonth);
+              return `<tr style="border-bottom:1px solid #f1f5f9;font-size:12px;"><td style="padding:14px;font-weight:bold;">${privacyMask?Utils.maskName(st.name):st.name}</td><td style="text-align:center;">${sch.length}</td><td style="text-align:right;">$${sT}</td><td style="text-align:right;color:#f43f5e;">$${pU}</td><td style="text-align:right;font-weight:bold;">$${sT+pU}</td></tr>`;
+            }).join('');
+            contentHtml = `<div style="display:flex;gap:20px;margin:30px 0;"><div style="flex:1;background:#f8fafc;padding:20px;border-radius:16px;">應收總額<div style="font-size:24px;font-weight:bold;margin-top:10px;">$${tR+tPrev}</div></div><div style="flex:1;background:#f0fdf4;padding:20px;border-radius:16px;color:#16a34a;">實收已付<div style="font-size:24px;font-weight:bold;margin-top:10px;">$${pR}</div></div><div style="flex:1;background:#fff5f5;padding:20px;border-radius:16px;color:#dc2626;">未收結欠<div style="font-size:24px;font-weight:bold;margin-top:10px;">$${uR+tPrev}</div></div></div><table style="width:100%;border-collapse:collapse;margin-top:20px;"><tr style="background:#f1f5f9;font-size:12px;text-align:left;"><th style="padding:12px;">學員</th><th style="text-align:center;">堂數</th><th style="text-align:right;">本月學費</th><th style="text-align:right;">上月結欠</th><th style="text-align:right;">應繳總額</th></tr>${tableRows}</table>`;
+          } else {
+            const ySch = schedules.filter(s => s.date.startsWith(`${currYear}-`) && !coachRestDays.includes(s.date));
+            let t=0, p=0, u=0; ySch.forEach(s => { if(s.isMerged)s.mergedStudents.forEach(ms=>{t+=ms.amount;ms.paid?p+=ms.amount:u+=ms.amount;}); else {t+=s.amount;s.paid?p+=s.amount:u+=s.amount;} });
+            
+            const poolStats = {}; ySch.forEach(s => poolStats[s.pool] = (poolStats[s.pool] || 0) + 1);
+            const pHtml = Object.entries(poolStats).sort((a,b)=>b[1]-a[1]).slice(0,3).map((x,i)=>`<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:12px;"><span style="font-weight:bold;">No.${i+1} ${x[0]}</span><span>${x[1]}堂</span></div>`).join('');
+            
+            const stStats = {}; ySch.forEach(s => { if(s.isMerged)s.mergedStudents.forEach(ms=>stStats[ms.studentId]=(stStats[ms.studentId]||0)+1); else stStats[s.studentId]=(stStats[s.studentId]||0)+1; });
+            const stHtml = Object.entries(stStats).sort((a,b)=>b[1]-a[1]).slice(0,3).map((x,i)=>{const f=students.find(st=>st.id===x[0]); return `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f1f5f9;font-size:12px;"><span style="font-weight:bold;">#${i+1} ${f?f.name:'未知'}</span><span>${x[1]}堂</span></div>`;}).join('');
+
+            contentHtml = `<div style="display:flex;gap:20px;margin:30px 0;"><div style="flex:1;background:#f8fafc;padding:20px;border-radius:16px;">年度應收<div style="font-size:24px;font-weight:bold;margin-top:10px;">$${t}</div></div><div style="flex:1;background:#f0fdf4;padding:20px;border-radius:16px;color:#16a34a;">實收已付<div style="font-size:24px;font-weight:bold;margin-top:10px;">$${p}</div></div><div style="flex:1;background:#fff5f5;padding:20px;border-radius:16px;color:#dc2626;">未收結欠<div style="font-size:24px;font-weight:bold;margin-top:10px;">$${u}</div></div></div><div style="display:flex;gap:20px;margin-top:30px;"><div style="flex:1;background:#fff;border:1px solid #e2e8f0;padding:20px;border-radius:16px;"><h3 style="font-size:13px;margin-bottom:10px;">熱門泳池排行</h3>${pHtml}</div><div style="flex:1;background:#fff;border:1px solid #e2e8f0;padding:20px;border-radius:16px;"><h3 style="font-size:13px;margin-bottom:10px;">熱門學員排行</h3>${stHtml}</div></div>`;
+          }
+
+          sandbox.innerHTML = `<div style="background:#007aff; border-radius:24px; padding:30px; color:#fff; display:flex; justify-content:space-between; box-shadow:0 10px 30px rgba(0,122,255,0.15);"><div><span style="font-size:10px; font-weight:900; background:rgba(255,255,255,0.2); padding:4px 12px; border-radius:100px;">${badge}</span><h1 style="font-size:26px; font-weight:900; margin:10px 0 0 0;">${title}</h1><p style="font-size:12px; margin:4px 0 0 0; opacity:0.85;">產出日期：${Utils.getToday()}</p></div><div style="text-align:right; font-size:18px; font-weight:900;">HKD</div></div>${contentHtml}<div style="margin-top:auto; border-top:1px dashed #cbd5e1; padding-top:20px; text-align:center; font-size:10px; color:#94a3b8; font-weight:bold; position:absolute; bottom:40px; width:calc(100% - 80px);">Powered by SwimAdmin Smart System</div>`;
+
+          const canvas = await html2canvas(sandbox, { scale: 2.0, backgroundColor: '#ffffff', logging: false });
+          const pdf = new (window.jspdf?.jsPDF || window.jsPDF)('p', 'mm', 'a4');
+          pdf.addImage(canvas.toDataURL('image/jpeg', 1.0), 'JPEG', 0, 0, 210, 297, undefined, 'FAST');
+          pdf.save(isM ? `月結單_${Utils.getToday()}.pdf` : `年報_${this.store.state.currYear}.pdf`);
+          sandbox.remove(); Utils.showToast("📄 PDF 匯出成功！", "success");
+        } catch (e) { Utils.showToast("報表導出失敗", "error"); } finally { hud.remove(); }
+      }
+
+      buildStudentPortalView() {
+        const { currYear, currMonth, schedules, coachRestDays, coachRestSlots, students, privacyMask } = this.store.state;
+        const currentStudent = students.find(s => s.id === TARGET_STUDENT_ID) || { name: '學員家長' };
+        const prefix = `${currYear}-${String(currMonth).padStart(2, '0')}`;
+        const myMonthSch = schedules.filter(s => s.date.startsWith(prefix) && (s.studentId === TARGET_STUDENT_ID || (s.isMerged && s.mergedStudents && s.mergedStudents.some(ms => ms.studentId === TARGET_STUDENT_ID))));
+        
+        let attendedCount = 0, monthlyAmount = 0, unpaidAmount = 0;
+        myMonthSch.forEach(s => {
+          if (coachRestDays.includes(s.date)) return; attendedCount++;
+          const mineObj = s.isMerged ? s.mergedStudents.find(ms => ms.studentId === TARGET_STUDENT_ID) : s;
+          if (mineObj) { monthlyAmount += mineObj.amount; if (!mineObj.paid) unpaidAmount += mineObj.amount; }
+        });
+        const prevUnpaid = this.store.getPreviousMonthUnpaid(TARGET_STUDENT_ID, currYear, currMonth), accTotalUnpaid = unpaidAmount + prevUnpaid, isSettle = accTotalUnpaid === 0;
+
+        const daysInMonth = new Date(currYear, currMonth, 0).getDate(); const firstDay = new Date(currYear, currMonth - 1, 1).getDay(); const offset = firstDay === 0 ? 6 : firstDay - 1;
+        let cellsHTML = Array(offset).fill(`<div class="bg-slate-50/10 border border-transparent rounded-xl aspect-square sm:aspect-auto sm:min-h-[110px]"></div>`).join('');
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${currYear}-${String(currMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const isSelected = this.store.state.selDate === dateStr; const isFullRest = coachRestDays.includes(dateStr);
+          const daySch = schedules.filter(s => s.date === dateStr); const dayRestSlots = coachRestSlots.filter(s => s.date === dateStr);
+          
+          let schBadgesHTML = '', microDotsHTML = '';
+          const myClassesOnDay = daySch.filter(s => s.studentId === TARGET_STUDENT_ID || (s.isMerged && s.mergedStudents && s.mergedStudents.some(ms => ms.studentId === TARGET_STUDENT_ID)));
+          const hasMyClassOnDay = myClassesOnDay.length > 0;
+
+          if (!isFullRest && (daySch.length > 0 || dayRestSlots.length > 0)) {
+            let cItems = [];
+            daySch.forEach(s => cItems.push({ t: 's', d: s, start: s.timeSlot.split(' - ')[0] }));
+            dayRestSlots.forEach(rs => cItems.push({ t: 'r', d: rs, start: rs.timeSlot.split(' - ')[0] }));
+            cItems.sort((a, b) => a.start.localeCompare(b.start));
+
+            cItems.forEach(item => {
+              if (item.t === 'r') {
+                schBadgesHTML += `<div class="compact-badge mt-1.5 w-full bg-rose-50 border-rose-200"><div class="flex justify-between items-center w-full"><span class="text-rose-600 font-black text-[9px]">${item.start} 休息</span></div></div>`;
+              } else {
+                const s = item.d; let isAllPaid = true;
+                const isMine = s.studentId === TARGET_STUDENT_ID || (s.isMerged && s.mergedStudents && s.mergedStudents.some(ms => ms.studentId === TARGET_STUDENT_ID));
+                if (isMine) {
+                  const ms = s.isMerged ? s.mergedStudents.find(m => m.studentId === TARGET_STUDENT_ID) : null;
+                  isAllPaid = ms ? ms.paid : s.paid;
+                  const pTheme = Utils.getPoolTheme(s.pool);
+                  let displayName = privacyMask ? Utils.maskName(currentStudent.name) : currentStudent.name;
+                  if (s.isMerged && s.mergedStudents) {
+                    const otherNames = s.mergedStudents.filter(m => m.studentId !== TARGET_STUDENT_ID).map(m => {
+                      const st = students.find(x => x.id === m.studentId);
+                      return st ? (privacyMask ? Utils.maskName(st.name) : st.name) : '';
+                    }).filter(Boolean);
+                    if (otherNames.length > 0) displayName += ' + ' + otherNames.join(' + ');
+                  }
+                  schBadgesHTML += `<div class="compact-badge mt-1.5 w-full ${pTheme.bg}"><div class="flex justify-between items-center w-full"><span class="font-black text-[9px]">${s.timeSlot.replace(' - ', '-')} ${displayName}</span><span class="${isAllPaid ? 'status-dot-paid' : 'status-dot-unpaid'} shrink-0"></span></div></div>`;
+                } else {
+                  schBadgesHTML += `<div class="compact-badge mt-1.5 w-full bg-slate-100 border-slate-200 opacity-60"><div class="flex justify-between items-center w-full"><span class="text-slate-500 font-bold text-[9px]">${s.timeSlot.split(' - ')[0]} 🔒 已預約</span><span class="w-1.5 h-1.5 bg-slate-300 rounded-full shrink-0"></span></div></div>`;
+                }
+              }
+            });
+
+            microDotsHTML = `<div class="flex flex-col items-center justify-between sm:hidden w-full h-full pb-1 relative">${hasMyClassOnDay ? `<div class="text-lg leading-none mt-0.5 animate-bounce" style="animation-duration:2.5s;">🏊</div>` : `<div class="h-4"></div>`}<div class="flex flex-wrap justify-center gap-0.5 mt-1 w-full max-w-full">${cItems.map(item => {
+              if (item.t === 'r') return `<span class="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_3px_#ef4444]"></span>`;
+              const isMine = item.d.studentId === TARGET_STUDENT_ID || (item.d.isMerged && item.d.mergedStudents && item.d.mergedStudents.some(ms => ms.studentId === TARGET_STUDENT_ID));
+              if (isMine) {
+                const isPaid = item.d.isMerged && item.d.mergedStudents ? item.d.mergedStudents.find(ms => ms.studentId === TARGET_STUDENT_ID).paid : item.d.paid;
+                return `<span class="w-1.5 h-1.5 rounded-full ${isPaid ? 'bg-emerald-500 shadow-[0_0_3px_#10b981]' : 'bg-amber-500 shadow-[0_0_3px_#f59e0b]'}"></span>`;
+              }
+              return `<span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span>`;
+            }).join('')}</div></div>`;
+          }
+
+          const bgHighlightClass = isSelected ? 'ring-2 ring-blue-500 border-blue-500 shadow-md z-10' : (hasMyClassOnDay ? 'bg-blue-50 border-blue-200' : 'border-slate-200');
+
+          cellsHTML += `
+            <div onclick="window.db.setDate('${dateStr}')" data-date="${dateStr}" class="cal-cell-box cursor-pointer ${bgHighlightClass} ${isFullRest ? 'rest-day-pattern' : ''}">
+              <div class="flex justify-between items-center w-full mb-1"><span class="text-xs font-black leading-none ${isSelected ? 'text-blue-600' : 'text-slate-700'}">${d}</span>${daySch.length > 0 && !isFullRest ? `<span class="bg-blue-50 text-blue-600 text-[8px] sm:text-[9px] px-1 py-0.5 rounded-full font-black leading-none">${daySch.length}堂</span>` : ''}</div>
+              <div class="flex-grow flex flex-col justify-end overflow-hidden w-full">${isFullRest ? '<span class="text-center text-sm py-1 sm:hidden">☕</span>' : `${microDotsHTML}<div class="hidden sm:block">${schBadgesHTML}</div>`}</div>
+            </div>`;
+        }
+
+        const isSelFullRest = coachRestDays.includes(this.store.state.selDate);
+        const selSchedules = schedules.filter(s => s.date === this.store.state.selDate).sort((a, b) => {
+          const timeSlotA = a.timeSlot ? a.timeSlot.split(' - ')[0] : '00:00';
+          const timeSlotB = b.timeSlot ? b.timeSlot.split(' - ')[0] : '00:00';
+          return timeSlotA.localeCompare(timeSlotB);
+        });
+
+        const selRestSlots = coachRestSlots.filter(s => s.date === this.store.state.selDate).sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
+        
+        let detailsHTML = isSelFullRest ? `<div class="text-center py-10 text-rose-500 font-bold">☕ 教練今日休息</div>` : '';
+        
+        if (!isSelFullRest) {
+          let listHTML = '';
+          selSchedules.forEach(s => { 
+            const isMine = s.studentId === TARGET_STUDENT_ID || (s.isMerged && s.mergedStudents && s.mergedStudents.some(ms => ms.studentId === TARGET_STUDENT_ID));
+            if (isMine) {
+              const ms = s.isMerged ? s.mergedStudents.find(m => m.studentId === TARGET_STUDENT_ID) : null;
+              const isPaid = ms ? ms.paid : s.paid;
+              const amt = ms ? ms.amount : s.amount;
+              let detailTitle = '🏊 游泳課';
+              if (s.isMerged && s.mergedStudents) {
+                  const names = s.mergedStudents.map(m => {
+                    const st = students.find(x => x.id === m.studentId);
+                    if (!st) return '';
+                    if (m.studentId === TARGET_STUDENT_ID) return privacyMask ? Utils.maskName(st.name) : st.name;
+                    return privacyMask ? Utils.maskName(st.name) : st.name;
+                  }).filter(Boolean).join(' + ');
+                  detailTitle = `🏊 游泳課 - ${names}`;
+              }
+              listHTML += `<div class="detail-sch-card border-blue-200 bg-blue-50/50"><div class="flex gap-4 items-center"><div class="p-3 bg-blue-100 rounded-2xl text-blue-600"><i data-lucide="check-circle" class="w-6 h-6"></i></div><div class="flex-grow"><div class="font-extrabold text-blue-800 text-base">${detailTitle}</div><div class="text-xs mt-1 text-blue-600/80">${s.timeSlot} · ${s.pool}</div></div></div><div class="mt-4 pt-4 border-t border-blue-100 flex justify-between items-center"><span class="${isPaid ? 'badge-paid' : 'badge-unpaid'}">${isPaid ? '已付訖' : '待付款'}</span><span class="font-black text-blue-900">$${amt}</span></div></div>`;
+            } else {
+              listHTML += `<div class="detail-sch-card opacity-50"><div class="flex gap-4 items-center"><div class="p-3 bg-slate-100 rounded-2xl text-slate-400"><i data-lucide="lock" class="w-6 h-6"></i></div><div class="flex-grow"><div class="font-extrabold text-slate-500 text-base">🔒 已預約時段</div><div class="text-xs mt-1 text-slate-400">${s.timeSlot.split(' - ')[0]} 開始</div></div></div></div>`;
+            }
+          });
+          detailsHTML = listHTML || `<div class="text-center py-8 text-slate-400 text-xs">本日無排班</div>`;
+        }
+
+        const daysStr = [...new Set(myMonthSch.map(s => parseInt(s.date.split('-')[2], 10)))].sort((a,b)=>a-b).join(', ') + '日';
+
+        return `
+          <div class="max-w-4xl mx-auto flex flex-col gap-6 animate-in fade-in">
+            <div class="relative overflow-hidden rounded-[28px] p-6 text-white shadow-2xl transition-all ${isSettle ? 'bg-gradient-to-br from-emerald-600 to-slate-900' : 'bg-gradient-to-br from-slate-900 to-slate-950'}">
+              <div class="flex justify-between items-start"><div><span class="text-[9px] font-black uppercase bg-white/10 px-2.5 py-1 rounded-full">SWIM ACCOUNT</span><h2 class="text-xl font-black mt-3">${privacyMask ? Utils.maskName(currentStudent.name) : currentStudent.name} 對帳卡</h2></div><span class="text-[10px] font-bold ${isSettle ? 'text-emerald-300 border-emerald-500/30' : 'text-amber-300 border-amber-500/30'} border px-3 py-1 rounded-full">${isSettle ? '本月已付訖 🎉' : '待付款項 ⏳'}</span></div>
+              <div class="mt-7"><span class="text-[10px] text-slate-400 font-extrabold block uppercase">合計應繳金額</span><div class="flex items-baseline gap-2 mt-1"><span class="text-3xl font-black ${privacyMask?'privacy-blurred':''} ">$${accTotalUnpaid}</span><span class="text-xs text-slate-400 font-bold">HKD</span></div></div>
+              <div class="mt-5 pt-4 border-t border-white/10 grid grid-cols-3 gap-2 text-center text-xs">
+                <div><span class="text-slate-400 block text-[9px] font-bold">本月上堂</span><span class="font-extrabold text-white mt-0.5 block">${attendedCount} 堂</span><span class="text-[8px] text-blue-300 block mt-1 leading-tight">${daysStr}</span></div>
+                <div><span class="text-slate-400 block text-[9px] font-bold">本月金額</span><span class="font-extrabold text-white mt-0.5 block ${privacyMask?'privacy-blurred':''}">$${monthlyAmount}</span></div>
+                <div><span class="text-slate-400 block text-[9px] font-bold">上月欠款</span><span class="font-extrabold text-rose-400 mt-0.5 block ${privacyMask?'privacy-blurred':''}">$${prevUnpaid}</span></div>
+              </div>
+            </div>
+            <div class="bg-white rounded-3xl p-5 border shadow-sm">
+              <div class="flex justify-between items-center mb-6"><div class="flex items-center gap-2"><button type="button" onclick="window.controller.openDatePicker()" class="px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-all border rounded-2xl font-black text-sm text-slate-700">${currYear} 年 ${currMonth} 月</button><div class="flex items-center bg-slate-50 border rounded-2xl p-1"><button type="button" onclick="window.db.prevMonth()" class="p-1.5 text-slate-500 hover:bg-slate-200 rounded-xl transition-all"><i data-lucide="chevron-left" class="w-4 h-4"></i></button><button type="button" onclick="window.db.nextMonth()" class="p-1.5 text-slate-500 hover:bg-slate-200 rounded-xl transition-all"><i data-lucide="chevron-right" class="w-4 h-4"></i></button></div></div><div class="flex gap-2"><button type="button" onclick="window.db.goToday()" class="px-3.5 py-2 bg-blue-50 text-blue-600 rounded-2xl text-xs font-black hover:bg-blue-100 transition-all">今日</button></div></div>
+              <div class="calendar-grid-inner" ontouchstart="window.controller.handleSwipeStart(event)" ontouchend="window.controller.handleSwipeEnd(event)"><div class="cal-header-sticky grid grid-cols-7 mb-2 text-slate-500 text-[10px] text-center font-black py-2"><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div class="text-rose-500">六</div><div class="text-rose-500">日</div></div><div class="grid grid-cols-7 gap-1.5 sm:gap-2.5 pt-2">${cellsHTML}</div></div>
+            </div>
+            <div class="dark-panel bg-slate-50 border border-slate-200 !text-slate-800 !shadow-none"><div class="flex items-center gap-3 mb-4"><i data-lucide="calendar-check" class="text-blue-600"></i><h3 class="font-extrabold text-base">${this.store.state.selDate} 當日明細</h3></div><div class="space-y-4">${detailsHTML}</div></div>
+          </div>`;
+      }
+
+      buildDashboardView() {
+        const { schedules, currYear, currMonth, students, dashboardSubTab, coachRestDays, privacyMask } = this.store.state;
+        
+        const calcRev = (schedulesArr) => {
+          let t=0, p=0, u=0;
+          schedulesArr.forEach(s => { if (s.isMerged) s.mergedStudents.forEach(ms => { t+=ms.amount; ms.paid?p+=ms.amount:u+=ms.amount; }); else { t+=s.amount; s.paid?p+=s.amount:u+=s.amount; }});
+          return {t,p,u};
+        };
+
+        if (dashboardSubTab === 'monthly') {
+          const monthSchedules = schedules.filter(s => s.date.startsWith(`${currYear}-${String(currMonth).padStart(2, '0')}`) && !coachRestDays.includes(s.date));
+          const rev = calcRev(monthSchedules);
+          let prevUnpaid = 0; students.forEach(st => { if (monthSchedules.some(s => s.studentId === st.id || (s.isMerged && s.mergedStudents.some(ms => ms.studentId===st.id)))) prevUnpaid += this.store.getPreviousMonthUnpaid(st.id, currYear, currMonth); });
+          const accT = rev.t + prevUnpaid, accU = rev.u + prevUnpaid;
+          const ratio = accT === 0 ? 100 : Math.round((rev.p / accT) * 100);
+
+          const listHtml = students.map(st => {
+            const stSch = monthSchedules.filter(s => s.studentId === st.id || (s.isMerged && s.mergedStudents.some(ms => ms.studentId === st.id))); if (stSch.length===0) return '';
+            
+            let stTotal = 0; let stUnpaid = 0;
+            stSch.forEach(s => {
+              if (s.isMerged) { const m=s.mergedStudents.find(x=>x.studentId===st.id); if(m){ stTotal+=m.amount; if(!m.paid) stUnpaid+=m.amount; } }
+              else { stTotal+=s.amount; if(!s.paid) stUnpaid+=s.amount; }
+            });
+            const pu = this.store.getPreviousMonthUnpaid(st.id, currYear, currMonth);
+            const totalUnpaid = stUnpaid + pu; const isSettle = totalUnpaid === 0;
+            
+            const daysStr = [...new Set(stSch.map(s => parseInt(s.date.split('-')[2], 10)))].sort((a,b)=>a-b).join(', ') + '日';
+            const smsText = `【${currMonth}月份對帳單】\n學員：${st.name}\n上課日期：${daysStr}\n本月課堂：共 ${stSch.length} 堂\n本月學費：$${stTotal}${pu>0?`\n上月未清：$${pu}`:''}\n應繳總額：$${stTotal + pu}`;
+            
+            return `<div class="bg-white border border-slate-100 p-5 rounded-3xl mb-4 shadow-sm flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+              <div><div class="font-extrabold text-slate-800 flex items-center gap-2">${privacyMask?Utils.maskName(st.name):st.name} ${pu>0?`<span class="bg-orange-50 text-orange-600 text-[9px] px-2 py-0.5 rounded-full animate-pulse">上月欠 $${pu}</span>`:''}</div><div class="text-[11px] text-slate-400 mt-1 font-bold">本月 ${stSch.length} 堂 · ${daysStr}</div></div>
+              <div class="flex items-center gap-2">${isSettle ? `<span class="px-4 py-2 bg-emerald-50 text-emerald-600 border border-emerald-200 rounded-xl text-xs font-black">已收訖</span>` : `<button type="button" onclick="window.controller.quickSettleStudent('${st.id}')" class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-black active:scale-95 shadow-md">結清 $${totalUnpaid}</button>`}<button type="button" onclick="window.controller.toggleSmsDrawer('${st.id}')" class="p-2 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-50 transition-all"><i data-lucide="message-square" class="w-4 h-4"></i></button></div>
+              </div><div id="sms-drawer-${st.id}" class="hidden mt-2 p-4 bg-slate-50 rounded-xl relative border border-slate-100"><button type="button" onclick="window.controller.copySMS('${st.id}')" class="absolute right-3 top-3 px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs font-black text-slate-700 shadow-sm"><i data-lucide="copy" class="w-3.5 h-3.5 inline mr-1"></i>複製</button><span class="text-[9px] font-black text-slate-400 block mb-2 uppercase">禮貌對帳簡訊</span><pre id="sms-${st.id}" class="text-xs text-slate-600 font-semibold whitespace-pre-wrap leading-relaxed">${smsText}</pre></div>`;
+          }).join('') || '<div class="text-center py-12 text-slate-400 font-semibold">當月無排班數據</div>';
+
+          return `<div class="max-w-5xl mx-auto flex flex-col gap-6"><div class="flex bg-slate-100 p-1 rounded-2xl max-w-xs mx-auto w-full"><button type="button" onclick="window.controller.setDashboardSubTab('monthly')" class="flex-1 py-2.5 rounded-xl text-xs font-black bg-white shadow-sm">本月對帳</button><button type="button" onclick="window.controller.setDashboardSubTab('annual')" class="flex-1 py-2.5 rounded-xl text-xs font-black text-slate-400">年度分析</button></div>
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6"><div class="lg:col-span-5 flex flex-col gap-4"><div class="bg-white rounded-3xl p-6 shadow-sm text-center relative overflow-hidden"><h3 class="text-xs font-extrabold text-slate-400 uppercase mb-6">實收率</h3><div class="relative flex items-center justify-center h-48"><svg class="w-40 h-40 transform -rotate-90"><circle cx="80" cy="80" r="70" stroke="#f1f5f9" stroke-width="12" fill="transparent" /><circle cx="80" cy="80" r="70" stroke="#007aff" stroke-dasharray="439.8" stroke-dashoffset="${439.8 - (439.8 * ratio) / 100}" stroke-width="14" stroke-linecap="round" fill="transparent" class="transition-all duration-1000" /></svg><div class="absolute flex flex-col items-center"><span class="text-4xl font-black">${ratio}%</span></div></div></div>
+          <div class="grid grid-cols-2 gap-4"><div class="bg-white p-4 rounded-3xl border shadow-sm"><span class="text-[10px] font-bold text-slate-400 block uppercase">本月總課堂</span><span class="text-xl font-black text-slate-800 block mt-1">${monthSchedules.length} 次</span></div><div class="bg-white p-4 rounded-3xl border shadow-sm"><span class="text-[10px] font-bold text-slate-400 block uppercase">應收總額</span><span class="text-xl font-black text-blue-600 block mt-1 ${privacyMask?'privacy-blurred':''}">$${accT}</span></div><div class="bg-emerald-50/50 p-4 rounded-3xl border border-emerald-100/50 shadow-sm"><span class="text-[10px] font-bold text-emerald-600 block uppercase">實收已付</span><span class="text-xl font-black text-emerald-600 block mt-1 ${privacyMask?'privacy-blurred':''}">$${rev.p}</span></div><div class="bg-amber-50/50 p-4 rounded-3xl border border-amber-100/50 shadow-sm"><span class="text-[10px] font-bold text-amber-600 block uppercase">待收餘額</span><span class="text-xl font-black text-amber-700 block mt-1 ${privacyMask?'privacy-blurred':''}">$${accU}</span></div></div></div>
+          <div class="lg:col-span-7"><div class="bg-slate-100/50 p-4 rounded-3xl mb-4 font-extrabold text-slate-800 text-sm">對帳細項</div>${listHtml}</div></div></div>`;
+        } else {
+          const yearSchedules = schedules.filter(s => s.date.startsWith(`${currYear}-`) && !coachRestDays.includes(s.date));
+          const rev = calcRev(yearSchedules);
+          const monthlyTotals = Array.from({length:12}, (_,i) => calcRev(schedules.filter(s => s.date.startsWith(`${currYear}-${String(i+1).padStart(2,'0')}`) && !coachRestDays.includes(s.date))).t);
+          const maxVal = Math.max(...monthlyTotals, 1000);
+          const chartHTML = monthlyTotals.map((val, idx) => `<div class="flex-1 flex flex-col items-center h-full justify-end relative"><div style="height: ${(val/maxVal)*100}%;" class="w-6 bg-gradient-to-t from-blue-600 to-indigo-500 rounded-t-full"></div><span class="text-[9px] font-black text-slate-400 mt-2">${idx+1}月</span></div>`).join('');
+
+          return `<div class="max-w-5xl mx-auto flex flex-col gap-6"><div class="flex bg-slate-100 p-1 rounded-2xl max-w-xs mx-auto w-full"><button type="button" onclick="window.controller.setDashboardSubTab('monthly')" class="flex-1 py-2.5 rounded-xl text-xs font-black text-slate-400">本月對帳</button><button type="button" onclick="window.controller.setDashboardSubTab('annual')" class="flex-1 py-2.5 rounded-xl text-xs font-black bg-white shadow-sm">年度分析</button></div>
+          <div class="bg-white rounded-3xl p-6 border shadow-sm max-w-xl mx-auto w-full"><h3 class="font-extrabold text-base mb-6">${currYear} 年度營收趨勢圖</h3><div class="grid grid-cols-3 gap-4 mb-8"><div class="bg-slate-50 p-4 rounded-2xl"><span class="text-[10px] font-bold text-slate-400">年度應收</span><span class="text-sm font-black mt-1">$${rev.t}</span></div><div class="bg-emerald-50 p-3 rounded-xl"><span class="text-[10px] font-bold text-emerald-600">實收已付</span><span class="text-xl font-black text-emerald-600 mt-1">$${rev.p}</span></div><div class="bg-amber-50 p-4 rounded-2xl"><span class="text-[10px] font-bold text-amber-600">未清差額</span><span class="text-xl font-black text-amber-700 mt-1">$${rev.u}</span></div></div><div class="h-60 flex items-end gap-2 border-b pb-3 mb-4">${chartHTML}</div></div></div>`;
+        }
+      }
+
+      buildCalendarView() {
+        const { currYear, currMonth, selDate, schedules, coachRestDays, coachRestSlots, students, copySource, privacyMask } = this.store.state;
+        const daysInMonth = new Date(currYear, currMonth, 0).getDate(); const firstDay = new Date(currYear, currMonth - 1, 1).getDay(); const offset = firstDay === 0 ? 6 : firstDay - 1;
+
+        let cellsHTML = Array(offset).fill(`<div class="bg-slate-50/10 border border-transparent rounded-xl aspect-square sm:aspect-auto sm:min-h-[110px]"></div>`).join('');
+        for (let d = 1; d <= daysInMonth; d++) {
+          const dateStr = `${currYear}-${String(currMonth).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const isSelected = selDate === dateStr; const isFullRest = coachRestDays.includes(dateStr);
+          const daySch = schedules.filter(s => s.date === dateStr);
+          const dayRestSlots = coachRestSlots.filter(s => s.date === dateStr);
+          
+          let schBadgesHTML = '', microDotsHTML = '';
+          if (!isFullRest && (daySch.length > 0 || dayRestSlots.length > 0)) {
+            let cItems = [];
+            daySch.forEach(s => cItems.push({ t: 's', d: s, start: s.timeSlot.split(' - ')[0] }));
+            dayRestSlots.forEach(rs => cItems.push({ t: 'r', d: rs, start: rs.timeSlot.split(' - ')[0] }));
+            cItems.sort((a, b) => a.start.localeCompare(b.start));
+
+            cItems.forEach(item => {
+              if (item.t === 'r') {
+                schBadgesHTML += `<div class="compact-badge mt-1.5 w-full bg-rose-50 border-rose-200"><div class="flex justify-between items-center w-full"><span class="text-rose-600 font-black text-[9px]">${item.start} 休息</span></div></div>`;
+              } else {
+                const s = item.d; let name = '', isAllPaid = true;
+                if (s.isMerged && s.mergedStudents) { name = s.mergedStudents.map(ms => { const x = students.find(std => std.id === ms.studentId); if (!ms.paid) isAllPaid = false; return x ? (privacyMask ? Utils.maskName(x.name) : x.name) : ''; }).filter(Boolean).join('+'); } 
+                else { const st = students.find(x => x.id === s.studentId); name = st ? (privacyMask ? Utils.maskName(st.name) : st.name) : '未知'; isAllPaid = s.paid; }
+                const pTheme = Utils.getPoolTheme(s.pool);
+                schBadgesHTML += `<div id="sch-card-${s.id}" draggable="true" ondragstart="window.controller.onDragStart(event, '${s.id}')" ontouchstart="window.controller.onTouchStart(event, '${s.id}')" ontouchmove="window.controller.onTouchMove(event)" ontouchend="window.controller.onTouchEnd(event)" class="compact-badge mt-1.5 cursor-grab active:cursor-grabbing w-full ${pTheme.bg}"><div class="flex justify-between items-center w-full"><span class="font-black text-[9px]">${s.timeSlot.replace(' - ', '-')}</span><span class="${isAllPaid ? 'status-dot-paid' : 'status-dot-unpaid'} shrink-0"></span></div><div class="font-extrabold truncate w-full mt-0.5 text-[9px]">${name}</div></div>`;
+              }
+            });
+            
+            microDotsHTML = `<div class="flex flex-wrap justify-center gap-0.5 mt-1.5 sm:hidden max-w-full">${cItems.map(item => {
+              if (item.t === 'r') return `<span class="w-1.5 h-1.5 rounded-full bg-rose-500 shadow-[0_0_4px_#ef4444]"></span>`;
+              const isPaid = item.d.isMerged && item.d.mergedStudents ? item.d.mergedStudents.every(ms => ms.paid) : item.d.paid;
+              return `<span class="w-1.5 h-1.5 rounded-full ${isPaid ? 'bg-emerald-500 shadow-[0_0_3px_#10b981]' : 'bg-amber-500 shadow-[0_0_3px_#f59e0b]'}"></span>`;
+            }).join('')}</div>`;
+          }
+
+          cellsHTML += `
+            <div onclick="${copySource ? `window.controller.pasteToDate('${dateStr}')` : `window.db.setDate('${dateStr}')`}" data-date="${dateStr}" ondragover="window.controller.onDragOver(event)" ondragleave="window.controller.onDragLeave(event)" ondrop="window.controller.onDrop(event, '${dateStr}')" class="cal-cell-box cursor-pointer ${isSelected ? 'ring-2 ring-blue-500 border-blue-500 shadow-md z-10' : 'border-slate-200'} ${isFullRest ? 'rest-day-pattern' : ''}">
+              <div class="flex justify-between items-center w-full mb-1"><span class="text-xs font-black leading-none ${isSelected ? 'text-blue-600' : 'text-slate-700'}">${d}</span>${daySch.length > 0 && !isFullRest ? `<span class="bg-blue-50 text-blue-600 text-[8px] sm:text-[9px] px-1 py-0.5 rounded-full font-black leading-none">${daySch.length}堂</span>` : ''}</div>
+              <div class="flex-grow flex flex-col justify-end overflow-hidden w-full">${isFullRest ? '<span class="text-center text-sm">☕</span>' : `${microDotsHTML}<div class="hidden sm:block">${schBadgesHTML}</div>`}</div>
+            </div>`;
+        }
+
+        const isSelFullRest = coachRestDays.includes(selDate);
+        const selSchedules = schedules.filter(s => s.date === selDate).sort((a, b) => {
+          const timeSlotA = a.timeSlot ? a.timeSlot.split(' - ')[0] : '00:00';
+          const timeSlotB = b.timeSlot ? b.timeSlot.split(' - ')[0] : '00:00';
+          return timeSlotA.localeCompare(timeSlotB);
+        });
+
+        const selRestSlots = coachRestSlots.filter(s => s.date === selDate).sort((a, b) => a.timeSlot.localeCompare(b.timeSlot));
+        
+        let detailsHTML = isSelFullRest ? `<div class="text-center py-10 text-rose-500 font-bold">☕ 教練今日全日休息</div>` : '';
+        if (!isSelFullRest) {
+          let listHTML = ''; const DAY_START = 480, DAY_END = 1260; let timelineItems = [];
+          selSchedules.forEach(s => { const [start, end] = s.timeSlot.split(' - '); timelineItems.push({ type: 'schedule', startMin: Utils.timeToMinutes(start), endMin: Utils.timeToMinutes(end), startStr: start, endStr: end, data: s }); });
+          selRestSlots.forEach(rs => { const [start, end] = rs.timeSlot.split(' - '); timelineItems.push({ type: 'rest', startMin: Utils.timeToMinutes(start), endMin: Utils.timeToMinutes(end), startStr: start, endStr: end, data: rs }); });
+          timelineItems.sort((a, b) => a.startMin - b.startMin);
+          
+          let currentMin = DAY_START;
+          const renderFreeSlot = (startM, endM) => {
+            if (endM - startM < 15) return ''; const startT = Utils.minutesToTime(startM), endT = Utils.minutesToTime(endM), dur = ((endM - startM) / 60).toFixed(1);
+            return `<div onclick="window.controller.openAddScheduleModalWithTime('${selDate}', '${startT}', '${endT}')" class="detail-sch-card border-dashed border-slate-300 bg-slate-50 cursor-pointer transition-all flex justify-between items-center group"><div class="flex items-center gap-3"><span class="text-xl opacity-60">⏸️</span><div><div class="font-extrabold text-slate-500 text-sm group-hover:text-blue-600 transition-colors">自訂預約空檔 (點擊排課)</div><div class="text-xs text-slate-400 mt-0.5">${startT} - ${endT} (${dur}h)</div></div></div><div class="text-slate-400 group-hover:text-blue-600"><i data-lucide="plus-circle" class="w-5 h-5"></i></div></div>`;
+          };
+
+          timelineItems.forEach((item) => {
+            if (item.startMin > currentMin) listHTML += renderFreeSlot(currentMin, item.startMin);
+            if (item.type === 'rest') {
+              listHTML += `<div class="detail-sch-card border-rose-200 bg-rose-50"><div class="flex justify-between items-center"><div class="flex items-center gap-3.5"><span class="text-2xl">☕</span><div><div class="font-extrabold text-rose-500 text-sm">教練休息時段</div><div class="text-xs text-rose-400 mt-0.5">${item.startStr} - ${item.endStr}</div></div></div><button type="button" onclick="window.db.deleteRestSlot('${item.data.id}')" class="text-rose-500 p-2"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></div>`;
+            } else {
+              const s = item.data; const name = this.store.getScheduleStudentName(s);
+              let payHtml = '';
+              if (s.isMerged && s.mergedStudents) { payHtml = s.mergedStudents.map(ms => { const stObj = students.find(x => x.id === ms.studentId); const sName = stObj ? (privacyMask ? Utils.maskName(stObj.name) : stObj.name) : '未知'; return `<span onclick="window.db.togglePaid('${s.id}', '${ms.studentId}')" class="cursor-pointer inline-flex items-center gap-1.5 mr-2 mb-1 ${ms.paid ? 'badge-paid' : 'badge-unpaid'}">${sName}: <span class="${privacyMask?'privacy-blurred':''} ">$${ms.amount}</span> ${ms.paid ? '已付' : '待付'}</span>`; }).join(''); } 
+              else { payHtml = `<span onclick="window.db.togglePaid('${s.id}')" class="cursor-pointer inline-flex items-center gap-1.5 ${s.paid ? 'badge-paid' : 'badge-unpaid'} mr-2">${s.paid ? '已付訖' : '待付款'}</span><span class="font-black text-slate-800 ${privacyMask?'privacy-blurred':''} ">$${s.amount}</span>`; }
+              listHTML += `<div class="detail-sch-card"><div class="flex gap-4 items-center"><div class="p-3 bg-blue-50 rounded-2xl text-blue-600"><i data-lucide="layers" class="w-6 h-6"></i></div><div class="flex-grow"><div class="font-extrabold text-slate-800 text-base">${privacyMask ? Utils.maskName(name) : name}</div><div class="text-xs mt-1 text-slate-500">${item.startStr} - ${item.endStr} · ${s.pool}</div></div></div><div class="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center"><div class="flex-grow flex flex-wrap items-center">${payHtml}</div><div class="flex gap-2"><button type="button" class="dark-icon-btn text-purple-600" onclick="window.controller.initCopy('${s.id}')"><i data-lucide="copy" class="w-4 h-4"></i></button><button type="button" class="dark-icon-btn text-blue-600" onclick="window.controller.openEditModal('${s.id}')"><i data-lucide="edit-2" class="w-4 h-4"></i></button><button type="button" class="dark-icon-btn text-rose-500" onclick="window.controller.openDeleteScheduleConfirm('${s.id}')"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></div></div>`;
+            }
+            currentMin = item.endMin;
+          });
+          if (currentMin < DAY_END) listHTML += renderFreeSlot(currentMin, DAY_END);
+          detailsHTML = listHTML || `<div class="text-center py-8 text-slate-400 text-xs">無排班或空檔</div>`;
+        }
+
+        return `
+          <div class="flex flex-col gap-6 animate-in fade-in duration-300">
+            ${copySource ? `<div class="p-4 bg-purple-600 text-white rounded-2xl flex justify-between shadow-lg"><span>連貼模式開啟</span><button type="button" onclick="window.controller.cancelCopy()" class="underline text-xs">取消</button></div>` : ''}
+            <div class="bg-white rounded-3xl p-5 border border-slate-100 shadow-sm">
+              <div class="flex justify-between items-center mb-6"><div class="flex items-center gap-2"><button type="button" onclick="window.controller.openDatePicker()" class="px-4 py-2 bg-slate-50 hover:bg-slate-100 transition-all border rounded-2xl font-black text-sm text-slate-700">${currYear} 年 ${currMonth} 月</button><div class="flex items-center bg-slate-50 border rounded-2xl p-1"><button type="button" onclick="window.db.prevMonth()" class="p-1.5 text-slate-500 hover:bg-slate-200 rounded-xl transition-all"><i data-lucide="chevron-left" class="w-4 h-4"></i></button><button type="button" onclick="window.db.nextMonth()" class="p-1.5 text-slate-500 hover:bg-slate-200 rounded-xl transition-all"><i data-lucide="chevron-right" class="w-4 h-4"></i></button></div></div><div class="flex gap-2"><button type="button" onclick="window.db.goToday()" class="px-3.5 py-2 bg-blue-50 text-blue-600 rounded-2xl text-xs font-black hover:bg-blue-100 transition-all">今日</button><button type="button" onclick="window.controller.openAddScheduleModal()" class="w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-lg transition-all"><i data-lucide="plus"></i></button></div></div>
+              <div class="calendar-grid-inner" ontouchstart="window.controller.handleSwipeStart(event)" ontouchend="window.controller.handleSwipeEnd(event)"><div class="cal-header-sticky grid grid-cols-7 mb-2 text-slate-500 text-[10px] text-center font-black py-2"><div>一</div><div>二</div><div>三</div><div>四</div><div>五</div><div class="text-rose-500">六</div><div class="text-rose-500">日</div></div><div class="grid grid-cols-7 gap-1.5 sm:gap-2.5 pt-2">${cellsHTML}</div></div>
+            </div>
+            <div class="dark-panel bg-slate-50 border border-slate-200 !text-slate-800 !shadow-none"><div class="flex items-center gap-3 mb-4"><i data-lucide="clock" class="text-blue-600"></i><h3 class="font-extrabold text-base">${selDate} 預約詳情</h3></div><button type="button" onclick="window.controller.openRestConfigModal('${selDate}')" class="px-5 py-2 bg-white border border-slate-200 text-slate-700 rounded-full font-bold text-xs mb-6 shadow-sm">☕ 設定教練休息</button><div class="space-y-4">${detailsHTML}</div></div>
+          </div>`;
+      }
+
+      openDatePicker() {
+        const { currYear, currMonth } = this.store.state;
+        const cY = new Date().getFullYear(); const years = [cY - 1, cY, cY + 1, cY + 2]; const months = Array.from({ length: 12 }, (_, i) => i + 1);
+        const yOpts = years.map(y => `<button type="button" onclick="window.controller.selectPickerDate(${y}, ${currMonth})" class="py-2.5 rounded-xl text-xs font-bold ${currYear === y ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}">${y}年</button>`).join('');
+        const mOpts = months.map(m => `<button type="button" onclick="window.controller.selectPickerDate(${currYear}, ${m})" class="py-2.5 rounded-xl text-xs font-bold ${currMonth === m ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}">${m}月</button>`).join('');
+        const mEl = document.getElementById('modal-container');
+        if (mEl) {
+          mEl.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-5 shadow-2xl animate-in zoom-in-95"><div class="flex justify-between items-center mb-4"><span class="font-extrabold text-slate-800">切換年月</span><button type="button" onclick="window.controller.closeModal()"><i data-lucide="x" class="text-slate-400"></i></button></div><div class="space-y-4"><div><span class="text-[10px] font-black text-slate-400 block mb-2">年份</span><div class="grid grid-cols-4 gap-2">${yOpts}</div></div><div><span class="text-[10px] font-black text-slate-400 block mb-2">月份</span><div class="grid grid-cols-4 gap-2">${mOpts}</div></div></div></div></div>`;
+          Utils.renderIcons();
+        }
+      }
+      selectPickerDate(y, m) { this.store.state.currYear = y; this.store.state.currMonth = m; this.store.setDate(`${y}-${String(m).padStart(2,'0')}-01`); this.closeModal(); }
+
+      openRestConfigModal(dateStr) {
+        const isFullRest = this.store.state.coachRestDays.includes(dateStr);
+        const mEl = document.getElementById('modal-container');
+        if (mEl) {
+          mEl.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative animate-in zoom-in-95"><div class="flex justify-between mb-5"><span class="font-black text-sm">☕ 教練休息配置 (${dateStr})</span><button type="button" onclick="window.controller.closeModal()"><i data-lucide="x" class="text-slate-400"></i></button></div><div class="space-y-5"><div class="p-4 bg-slate-50 border rounded-2xl flex justify-between items-center"><div><span class="text-xs font-black block">全日休息</span><span class="text-[10px] text-slate-400 block mt-0.5">不開放約堂</span></div><button type="button" onclick="window.db.toggleRestDay('${dateStr}'); window.controller.openRestConfigModal('${dateStr}');" class="px-4 py-2 text-xs font-black rounded-xl ${isFullRest ? 'bg-rose-500 text-white shadow-md' : 'bg-slate-200 text-slate-700'}">${isFullRest ? '已設為全日休息' : '設為全日休息'}</button></div><div class="p-4 bg-slate-50 border rounded-2xl ${isFullRest ? 'opacity-40 pointer-events-none' : ''}"><span class="text-xs font-black block mb-3">特定時段休息</span><div class="grid grid-cols-2 gap-3"><div><span class="text-[10px] font-bold text-slate-400 block mb-1">開始</span><select id="r-start-t" class="w-full p-2 bg-white border rounded-xl text-xs font-black outline-none">${Array.from({ length: 24 }, (_, i) => `<option value="${String(i).padStart(2,'0')}:00">${String(i).padStart(2,'0')}:00</option>`).join('')}</select></div><div><span class="text-[10px] font-bold text-slate-400 block mb-1">結束</span><select id="r-end-t" class="w-full p-2 bg-white border rounded-xl text-xs font-black outline-none">${Array.from({ length: 24 }, (_, i) => `<option value="${String(i).padStart(2,'0')}:00" ${i === 18 ? 'selected' : ''}>${String(i).padStart(2,'0')}:00</option>`).join('')}</select></div></div><div class="flex flex-wrap gap-1.5 mt-3">${CONFIG.TIME_SHORTCUTS.map(t => `<button type="button" onclick="document.getElementById('r-start-t').value='${t.split(' - ')[0]}'; document.getElementById('r-end-t').value='${t.split(' - ')[1]}';" class="px-2.5 py-1.5 bg-white border rounded-lg text-[9px] font-bold text-slate-600">${t}</button>`).join('')}</div><button type="button" onclick="window.controller.submitRestSlot('${dateStr}')" class="w-full mt-4 py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold shadow-sm">+ 確認新增時段</button></div></div></div></div>`;
+          Utils.renderIcons();
+        }
+      }
+      submitRestSlot(dateStr) {
+        const start = document.getElementById('r-start-t').value, end = document.getElementById('r-end-t').value;
+        if (Utils.timeToMinutes(start) >= Utils.timeToMinutes(end)) return Utils.showToast('⚠️ 結束時間必須晚於開始時間！', 'error');
+        this.store.addRestSlot(dateStr, `${start} - ${end}`); this.openRestConfigModal(dateStr);
+      }
+
+      openAddScheduleModal() {
+        this.selectedMergedStudents = []; this.addMode = 'single'; this.splitMode = 'total';
+        const { students, selDate, coachRestDays } = this.store.state;
+        if (coachRestDays.includes(selDate)) return Utils.showToast('本日為全日休息', 'error');
+
+        const { h, m } = Utils.buildTimeOptions('15', '00');
+        const stOpts = students.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+        const pOpts = CONFIG.POOLS.map(p => `<option value="${p}">${p}</option>`).join('');
+
+        const mEl = document.getElementById('modal-container');
+        if (mEl) {
+          mEl.innerHTML = `
+            <div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative animate-in zoom-in-95"><h3 class="font-extrabold mb-4">預約課堂 (${selDate})</h3><div class="flex bg-slate-100 p-1 rounded-2xl mb-4"><button type="button" id="tab-single" onclick="window.controller.toggleAddMode('single')" class="flex-1 py-2 rounded-xl text-xs font-black bg-white shadow-sm">單人</button><button type="button" id="tab-merged" onclick="window.controller.toggleAddMode('merged')" class="flex-1 py-2 rounded-xl text-xs font-black text-slate-500">包班</button></div>
+            <div id="section-single" class="space-y-3"><select id="f-student" onchange="window.controller.autoFillRateAndPool(this.value)" class="w-full p-3 bg-slate-50 border rounded-xl outline-none"><option value="">-- 選取學員 --</option>${stOpts}</select><input type="number" id="f-amount" placeholder="學費 (HKD)" class="w-full p-3 bg-slate-50 border rounded-xl outline-none"></div>
+            <div id="section-merged" class="space-y-3 hidden"><div class="p-3 bg-slate-50 rounded-xl grid grid-cols-2 gap-2 max-h-[120px] overflow-y-auto">${students.map(s => `<button type="button" onclick="window.controller.toggleSelectMergedStudent('${s.id}')" id="chk-st-${s.id}" class="p-2 border rounded-lg text-xs font-bold bg-white text-slate-600 text-left flex justify-between items-center transition-all"><span>${s.name}</span><span id="chk-icon-${s.id}" class="hidden text-white"><i data-lucide="check" class="w-4 h-4"></i></span></button>`).join('')}</div><div class="flex bg-slate-100 p-1 rounded-lg"><button type="button" id="split-total" onclick="window.controller.toggleSplitMode('total')" class="flex-1 py-1 text-[10px] bg-blue-600 text-white rounded shadow-sm">總價</button><button type="button" id="split-each" onclick="window.controller.toggleSplitMode('each')" class="flex-1 py-1 text-[10px] text-slate-600">個別</button></div><div id="container-total-fee"><input type="number" id="f-total-amount" oninput="window.controller.recalculateMergedFee()" placeholder="包班總價" class="w-full p-3 bg-slate-50 border rounded-xl outline-none text-xs font-bold"><div id="f-split-feedback" class="text-[11px] font-bold text-blue-600 mt-1 hidden"></div></div><div id="container-each-fee" class="hidden space-y-2 max-h-[100px] overflow-y-auto">${students.map(s=>`<div id="each-fee-row-${s.id}" class="hidden flex justify-between bg-slate-50 p-2 rounded"><span class="text-xs">${s.name}</span><input type="number" id="f-each-amount-${s.id}" value="${s.defaultRate}" class="w-20 p-1 border text-xs text-center"></div>`).join('')}</div></div>
+            <div class="grid grid-cols-2 gap-2 mt-4"><div class="flex gap-1"><select id="f-start-h" onchange="window.controller.syncEndTime()" class="w-full p-3 bg-slate-50 border rounded-xl outline-none">${h}</select><select id="f-start-m" onchange="window.controller.syncEndTime()" class="w-full p-3 bg-slate-50 border rounded-xl outline-none">${m}</select></div><div class="flex gap-1"><select id="f-end-h" class="w-full p-3 bg-slate-50 border rounded-xl outline-none">${h}</select><select id="f-end-m" class="w-full p-3 bg-slate-50 border rounded-xl outline-none">${m}</select></div></div><div class="flex flex-wrap gap-2 mt-2">${CONFIG.TIME_SHORTCUTS.map(t => `<button type="button" onclick="window.controller.applyTimeShortcut('${t}')" class="px-2 py-1 bg-slate-50 border rounded text-[10px]">${t}</button>`).join('')}</div><select id="f-pool" class="w-full p-3 mt-4 bg-slate-50 border rounded-xl outline-none">${pOpts}</select><select id="f-repeat-weeks" class="w-full p-3 mt-3 bg-white border rounded-xl text-xs font-bold outline-none"><option value="1">排本次不重複</option><option value="4">連續排4週</option><option value="8">連續排8週</option></select>
+            <div class="flex gap-3 mt-6"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs">取消</button><button type="button" onclick="window.controller.submitSchedule()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs">確認預約</button></div></div></div>`;
+          Utils.renderIcons();
+        }
+      }
+
+      toggleAddMode(m) {
+        this.addMode = m; const $ = id => document.getElementById(id);
+        if(m === 'single') { $('tab-single').className = "flex-1 py-2 rounded-xl text-xs font-black bg-white shadow-sm"; $('tab-merged').className = "flex-1 py-2 rounded-xl text-xs font-black text-slate-500"; $('section-single').classList.remove('hidden'); $('section-merged').classList.add('hidden'); }
+        else { $('tab-single').className = "flex-1 py-2 rounded-xl text-xs font-black text-slate-500"; $('tab-merged').className = "flex-1 py-2 rounded-xl text-xs font-black bg-blue-600 text-white shadow-sm"; $('section-single').classList.add('hidden'); $('section-merged').classList.remove('hidden'); this.recalculateMergedFee(); }
+      }
+
+      toggleSplitMode(m) {
+        this.splitMode = m; const $ = id => document.getElementById(id);
+        if(m === 'total') { $('split-total').className="flex-1 py-1 text-[10px] bg-blue-600 text-white rounded shadow-sm"; $('split-each').className="flex-1 py-1 text-[10px] text-slate-600"; $('container-total-fee').classList.remove('hidden'); $('container-each-fee').classList.add('hidden'); }
+        else { $('split-total').className="flex-1 py-1 text-[10px] text-slate-600"; $('split-each').className="flex-1 py-1 text-[10px] bg-blue-600 text-white rounded shadow-sm"; $('container-total-fee').classList.add('hidden'); $('container-each-fee').classList.remove('hidden'); this.recalculateMergedFee(); }
+      }
+
+      toggleSelectMergedStudent(id) {
+        const idx = this.selectedMergedStudents.indexOf(id), card = document.getElementById(`chk-st-${id}`), icon = document.getElementById(`chk-icon-${id}`), row = document.getElementById(`each-fee-row-${id}`);
+        if(idx > -1) { 
+          this.selectedMergedStudents.splice(idx, 1); 
+          if(card) { card.classList.replace('bg-blue-600','bg-white'); card.classList.replace('text-white','text-slate-600'); card.classList.add('border'); }
+          if(icon) icon.classList.add('hidden');
+          if(row) row.classList.add('hidden'); 
+        } else { 
+          this.selectedMergedStudents.push(id); 
+          if(card) { card.classList.replace('bg-white','bg-blue-600'); card.classList.replace('text-slate-600','text-white'); card.classList.remove('border'); }
+          if(icon) icon.classList.remove('hidden');
+          if(row) row.classList.remove('hidden'); 
+        }
+        this.recalculateMergedFee();
+      }
+
+      recalculateMergedFee() {
+        const feedbackEl = document.getElementById('f-split-feedback'); if (!feedbackEl) return;
+        if (this.splitMode === 'total') {
+          const count = this.selectedMergedStudents.length; let total = 0; const inputVal = document.getElementById('f-total-amount').value;
+          if (inputVal === '') { total = this.selectedMergedStudents.reduce((acc, stId) => { const s = this.store.state.students.find(x => x.id === stId); return acc + (s ? s.defaultRate : 350); }, 0); document.getElementById('f-total-amount').placeholder = total || '總價'; } 
+          else { total = Utils.safeNum(inputVal); }
+          if (count > 0 && total > 0) { feedbackEl.innerHTML = `✨ 均分 (${count} 人)：約 $${Math.round(total / count)}/人`; feedbackEl.classList.remove('hidden'); } else feedbackEl.classList.add('hidden');
+        } else feedbackEl.classList.add('hidden');
+      }
+
+      autoFillRateAndPool(stId) { const st = this.store.state.students.find(s => s.id === stId); if (st) { document.getElementById('f-amount').value = st.defaultRate; if (st.defaultPool) document.getElementById('f-pool').value = st.defaultPool; } }
+      applyTimeShortcut(ts) { const [s,e] = ts.split(' - '); document.getElementById('f-start-h').value = s.split(':')[0]; document.getElementById('f-start-m').value = s.split(':')[1]; document.getElementById('f-end-h').value = e.split(':')[0]; document.getElementById('f-end-m').value = e.split(':')[1]; }
+      syncEndTime() { const sh = parseInt(document.getElementById('f-start-h').value); document.getElementById('f-end-h').value = String((sh + 1) % 24).padStart(2, '0'); document.getElementById('f-end-m').value = document.getElementById('f-start-m').value; }
+
+      submitSchedule() {
+        try {
+          const $ = id => document.getElementById(id);
+          const startHEl = $('f-start-h');
+          if (!startHEl) return;
+
+          const timeSlot = `${startHEl.value}:${$('f-start-m').value} - ${$('f-end-h').value}:${$('f-end-m').value}`;
+          const p = $('f-pool').value;
+          const rw = parseInt($('f-repeat-weeks')?.value || '1', 10);
+          const [by, bm, bd] = this.store.state.selDate.split('-').map(Number);
+          let sc = 0, conflicts = [];
+          
+          if (rw === 1) {
+            const checkDate = new Date(by, bm - 1, bd);
+            const targetDateStr = `${checkDate.getFullYear()}-${String(checkDate.getMonth()+1).padStart(2,'0')}-${String(checkDate.getDate()).padStart(2,'0')}`;
+            if (Utils.checkConflict(targetDateStr, timeSlot)) {
+              return Utils.showToast("⚠️ 預約失敗：該時段已有其他課堂或教練休息！", "error");
+            }
+          }
+
+          for (let w = 0; w < rw; w++) {
+            const tD = new Date(by, bm - 1, bd + w * 7);
+            const targetDateStr = `${tD.getFullYear()}-${String(tD.getMonth()+1).padStart(2,'0')}-${String(tD.getDate()).padStart(2,'0')}`;
+            if (Utils.checkConflict(targetDateStr, timeSlot)) { conflicts.push(targetDateStr); continue; }
+            
+            if (this.addMode === 'single') {
+              const stId = $('f-student')?.value; 
+              if (!stId) return Utils.showToast('請選取學員', 'error');
+              this.store.addSchedule(stId, targetDateStr, timeSlot, p, $('f-amount')?.value || 0);
+            } else {
+              if (this.selectedMergedStudents.length < 2) return Utils.showToast('合班需兩名以上', 'error');
+              let mSts = [], tAmt = 0;
+              if (this.splitMode === 'total') {
+                const inputTotalRaw = $('f-total-amount')?.value;
+                const inputTotal = Utils.safeNum(inputTotalRaw) || this.selectedMergedStudents.reduce((acc, stId) => { const s = this.store.state.students.find(x => x.id === stId); return acc + (s ? s.defaultRate : 350); }, 0);
+                const avg = Math.round(inputTotal / this.selectedMergedStudents.length); 
+                tAmt = inputTotal;
+                mSts = this.selectedMergedStudents.map(id => ({ studentId: id, amount: avg, paid: false }));
+              } else {
+                this.selectedMergedStudents.forEach(id => { 
+                  const a = Utils.safeNum($(`f-each-amount-${id}`)?.value || 0); 
+                  tAmt += a; 
+                  mSts.push({ studentId: id, amount: a, paid: false }); 
+                });
+              }
+              this.store.addSchedule(null, targetDateStr, timeSlot, p, tAmt, true, mSts);
+            }
+            sc++;
+          }
+          
+          if (rw > 1 && sc === 0) {
+            return Utils.showToast("⚠️ 排班失敗：所選的多週時段皆與現有排程衝突！", "error");
+          }
+
+          this.closeModal();
+          if (rw > 1) sc === rw ? Utils.showToast(`🎉 連續排課 ${sc} 週成功！`, "success") : Utils.showToast(`⚠️ 成功 ${sc} 週，跳過衝突 ${conflicts.length} 週`, "warning");
+        } catch (error) {
+          console.error("Schedule Submit Error:", error);
+          Utils.showToast("新增課堂時發生錯誤", "error");
+        }
+      }
+
+      openEditModal(schId) {
+        const sch = this.store.state.schedules.find(s => s.id === schId); if (!sch) return;
+        const [sh, sm] = sch.timeSlot.split(' - ')[0].split(':'); const { h, m } = Utils.buildTimeOptions(sh, sm);
+        const pOpts = CONFIG.POOLS.map(p => `<option value="${p}" ${p===sch.pool?'selected':''}>${p}</option>`).join('');
+        const mEl = document.getElementById('modal-container');
+        if (mEl) {
+          mEl.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative"><h3 class="font-extrabold mb-4">修改課堂</h3><div class="space-y-3"><input type="date" id="e-date" value="${sch.date}" class="w-full p-3 bg-slate-50 border rounded-xl outline-none"><div class="flex gap-2"><select id="e-start-h" class="w-full p-3 bg-slate-50 border rounded-xl">${h}</select><select id="e-start-m" class="w-full p-3 bg-slate-50 border rounded-xl">${m}</select></div><select id="e-pool" class="w-full p-3 bg-slate-50 border rounded-xl">${pOpts}</select><input type="number" id="e-amount" value="${sch.amount}" class="w-full p-3 bg-slate-50 border rounded-xl outline-none"></div><div class="flex gap-3 mt-6"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-xs">取消</button><button type="button" onclick="window.controller.submitEdit('${sch.id}')" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs">確認</button></div></div></div>`;
+        }
+      }
+
+      async submitEdit(schId) {
+        try {
+          const sch = this.store.state.schedules.find(s => s.id === schId); if (!sch) return;
+          const date = document.getElementById('e-date')?.value || sch.date;
+          const sh = document.getElementById('e-start-h')?.value || '15', sm = document.getElementById('e-start-m')?.value || '00';
+          const eh = document.getElementById('e-end-h')?.value || '16', em = document.getElementById('e-end-m')?.value || '00';
+          const timeSlot = `${sh}:${sm} - ${eh}:${em}`;
+          if (Utils.checkConflict(date, timeSlot, schId)) return Utils.showToast("⚠️ 修改失敗：時段衝突！", "error");
+
+          sch.date = date; sch.timeSlot = timeSlot; 
+          sch.pool = document.getElementById('e-pool')?.value || ''; 
+          sch.amount = Utils.safeNum(document.getElementById('e-amount')?.value);
+          
+          this.store.save(true); this.closeModal(); Utils.showToast("修改完成！", "success");
+          if (this.store.state.googleConnected) await this.syncEditToGoogle(sch);
+        } catch (error) {
+          console.error("Schedule Edit Error:", error);
+          Utils.showToast("修改課堂發生錯誤", "error");
+        }
+      }
+
+      render() {
+        const contentEl = document.getElementById('app-content');
+        if (!contentEl) return;
+        const { activeTab, privacyMask } = this.store.state;
+        const pIcon = document.getElementById('privacy-icon'), pBtn = document.getElementById('privacy-toggle-btn');
+        if (pIcon && pBtn) { pIcon.setAttribute('data-lucide', privacyMask ? 'eye-off' : 'eye'); pBtn.className = `p-2 rounded-xl transition-all border border-slate-150 ${privacyMask ? 'text-blue-600 bg-blue-50 border-blue-200' : 'hover:bg-slate-50 text-slate-400'}`; }
+
+        if (!IS_STUDENT_MODE && !sessionStorage.getItem('swim_admin_unlocked')) {
+          this.renderPasscodeGateScreen(contentEl);
+          return;
+        }
+
+        if (!IS_STUDENT_MODE) {
+          document.querySelectorAll('nav button').forEach(b => { b.classList.remove('text-blue-600'); b.classList.add('text-slate-400'); });
+          const activeNavBtn = document.getElementById(`nav-btn-${activeTab}`); if (activeNavBtn) { activeNavBtn.classList.remove('text-slate-400'); activeNavBtn.classList.add('text-blue-600'); }
+        }
+
+        try {
+          contentEl.innerHTML = IS_STUDENT_MODE ? this.buildStudentPortalView() : activeTab === 'calendar' ? this.buildCalendarView() : activeTab === 'dashboard' ? this.buildDashboardView() : activeTab === 'students' ? this.buildStudentsView() : this.buildSettingsView();
+        } catch (e) {
+          console.error("Render View Error:", e);
+          contentEl.innerHTML = `<div class="p-8 text-center text-rose-500 font-bold">加載視圖時發生錯誤</div>`;
+        }
+        
+        Utils.renderIcons();
+      }
+
+      renderPasscodeGateScreen(contentEl) {
+        contentEl.innerHTML = `<div class="max-w-md mx-auto my-12 bg-white rounded-3xl p-8 border border-slate-100 shadow-xl text-center"><div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6"><i data-lucide="lock" class="w-8 h-8"></i></div><h2 class="text-lg font-black text-slate-800">輸入教練安全解鎖密碼</h2><div class="space-y-4 mt-6"><input type="password" id="gate-passcode-input" inputmode="numeric" pattern="[0-9]*" autocomplete="new-password" placeholder="請輸入 4 位數數字密碼" class="w-full text-center p-4 bg-slate-50 border border-slate-200 rounded-2xl text-lg font-black outline-none" onkeydown="if(event.key === 'Enter') window.controller.verifyGatePasscode()"><button type="button" onclick="window.controller.verifyGatePasscode()" class="w-full py-4 bg-blue-600 text-white rounded-2xl text-sm font-black shadow-lg">解鎖後台</button></div></div>`;
+      }
+
+      verifyGatePasscode() {
+        const inp = document.getElementById('gate-passcode-input'); if (!inp) return;
+        if (inp.value === (this.store.state.coachPasscode || '8888')) { sessionStorage.setItem('swim_admin_unlocked', 'true'); Utils.showToast("🔓 解鎖成功！", "success"); this.render(); } 
+        else { Utils.showToast("❌ 密碼錯誤！", "error"); inp.value = ''; }
+      }
+
+      openPasscodeGateModal() {
+        const m = document.getElementById('modal-container');
+        if (m) {
+          m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-6 shadow-2xl text-center"><i data-lucide="lock" class="w-12 h-12 text-blue-600 mx-auto mb-3"></i><h3 class="font-black text-sm mb-4">需要教練權限</h3><input type="password" id="gate-passcode-input-modal" inputmode="numeric" pattern="[0-9]*" placeholder="輸入數字密碼" class="w-full text-center p-3 bg-slate-50 border rounded-xl text-sm font-black outline-none mb-4"><button type="button" onclick="const inp=document.getElementById('gate-passcode-input-modal'); if(inp && inp.value===(window.db.state.coachPasscode||'8888')){sessionStorage.setItem('swim_admin_unlocked','true');window.controller.closeModal();window.controller.render();Utils.showToast('解鎖成功', 'success');}else{Utils.showToast('密碼錯誤', 'error');if(inp)inp.value='';}" class="w-full py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold">立即解鎖</button></div></div>`;
+          Utils.renderIcons();
+        }
+      }
+
+      onDragStart(e, schId) { e.dataTransfer.setData('text/plain', schId); e.dataTransfer.effectAllowed = 'move'; this.activeDragSchId = schId; }
+      onDragOver(e) { e.preventDefault(); const cell = e.target.closest('.cal-cell-box'); if (cell && !this.store.state.coachRestDays.includes(cell.getAttribute('data-date'))) cell.classList.add('drag-hover'); }
+      onDragLeave(e) { const cell = e.target.closest('.cal-cell-box'); if (cell) cell.classList.remove('drag-hover'); }
+      onDrop(e, targetDateStr) { e.preventDefault(); const cell = e.target.closest('.cal-cell-box'); if (cell) cell.classList.remove('drag-hover'); const schId = e.dataTransfer.getData('text/plain') || this.activeDragSchId; if (schId) { this.store.moveSchedule(schId, targetDateStr); this.activeDragSchId = null; } }
+
+      onTouchStart(e, schId) {
+        const touch = e.touches[0]; this.touchStartX = touch.clientX; this.touchStartY = touch.clientY; this.activeDragSchId = schId; this.isDraggingActive = false;
+        this.touchStartTimer = setTimeout(() => {
+          this.isDraggingActive = true; document.body.classList.add('drag-locked'); if (navigator.vibrate) navigator.vibrate(50);
+          const targetCard = document.getElementById(`sch-card-${schId}`);
+          if (targetCard) {
+            const avatar = document.createElement('div'); avatar.id = 'drag-avatar-preview'; avatar.className = 'drag-avatar p-3 rounded-xl text-xs font-bold text-blue-800 shadow-2xl'; avatar.innerHTML = targetCard.innerHTML; document.body.appendChild(avatar); this.updateAvatarPosition(touch.clientX, touch.clientY);
+          }
+        }, 400);
+      }
+      onTouchMove(e) {
+        const touch = e.touches[0]; if (!this.isDraggingActive) { if (Math.hypot(touch.clientX - this.touchStartX, touch.clientY - this.touchStartY) > 10) clearTimeout(this.touchStartTimer); return; }
+        e.preventDefault(); this.updateAvatarPosition(touch.clientX, touch.clientY);
+        const cell = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.cal-cell-box');
+        document.querySelectorAll('.cal-cell-box').forEach(c => c.classList.remove('drag-hover'));
+        if (cell && !this.store.state.coachRestDays.includes(cell.getAttribute('data-date'))) cell.classList.add('drag-hover');
+      }
+      onTouchEnd(e) {
+        clearTimeout(this.touchStartTimer); document.body.classList.remove('drag-locked');
+        const avatar = document.getElementById('drag-avatar-preview'); if (avatar) avatar.remove();
+        document.querySelectorAll('.cal-cell-box').forEach(c => c.classList.remove('drag-hover'));
+        if (this.isDraggingActive && this.activeDragSchId) {
+          const cell = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY)?.closest('.cal-cell-box');
+          if (cell) this.store.moveSchedule(this.activeDragSchId, cell.getAttribute('data-date'));
+        }
+        this.isDraggingActive = false; this.activeDragSchId = null;
+      }
+      updateAvatarPosition(x, y) { const avatar = document.getElementById('drag-avatar-preview'); if (avatar) { avatar.style.left = `${x - 60}px`; avatar.style.top = `${y - 40}px`; } }
+
+      initCopy(schId) { const f = this.store.state.schedules.find(s => s.id === schId); if (f) { this.store.state.copySource = f; this.store.save(false); Utils.showToast("已複製排堂，請點擊其他日期貼上。"); } }
+      cancelCopy() { this.store.state.copySource = null; this.store.save(false); Utils.showToast("已結束課堂複製"); }
+      pasteToDate(dateStr) {
+        const src = this.store.state.copySource; if (!src) return;
+        if (Utils.checkConflict(dateStr, src.timeSlot)) { Utils.showToast("⚠️ 複製失敗：時段衝突！", "error"); return; }
+        let newSch = { id: Utils.uuid(), date: dateStr, timeSlot: src.timeSlot, pool: src.pool, amount: src.amount, paid: false, isMerged: src.isMerged || false, googleEventId: null };
+        if (src.isMerged && src.mergedStudents) newSch.mergedStudents = src.mergedStudents.map(ms => ({ studentId: ms.studentId, amount: ms.amount, paid: false })); else newSch.studentId = src.studentId;
+        this.store.state.schedules.push(newSch); this.store.save(true); Utils.showToast(`貼上成功！`, "success");
+        if (this.store.state.googleConnected) this.syncScheduleToGoogle(newSch);
+      }
+    }
+
+    // 將所有實例掛載至全域
+    window.Utils = Utils;
+    window.db = window.db || new Database();
+    window.controller = new AppController(window.db);
+
+    // ==========================================
+    // ☁️ Firebase 深度安全連線機制 (完全修復)
+    // ==========================================
+    const initFirebaseSync = async () => {
+      // 🚀 完整保留您的 API 金鑰
+      const fbConfig = { 
+        apiKey: "AIzaSyCxyqdWVZ02fNm-P77cdIDQ4n1eMxQYU6k", 
+        authDomain: "kanswim-314d1.firebaseapp.com", 
+        projectId: "kanswim-314d1", 
+        storageBucket: "kanswim-314d1.firebasestorage.app", 
+        messagingSenderId: "637904769497", 
+        appId: "1:637904769497:web:017af2c602f47cbc5e89c8",
+        measurementId: "G-VBHP38JTL6"
+      };
+      
+      try {
+        const app = initializeApp(fbConfig); 
+        const auth = getAuth(app); 
+        const fstore = getFirestore(app);
+        
+        // 遵守 Rule 3: Auth First
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+           await signInWithCustomToken(auth, __initial_auth_token).catch(() => signInAnonymously(auth)); 
+        } else {
+           await signInAnonymously(auth);
+        }
+        
+        onAuthStateChanged(auth, (user) => {
+          if (!user) return;
+
+          // 🚀 核心拉取邏輯 (強制下載 / 初始化備份)
+          window.firestore_pull = async (key, silent) => {
+            try {
+              const docRef = doc(fstore, 'artifacts', 'kanswim-314d1', 'public', 'data', 'coach_baskets', key);
+              const snap = await getDoc(docRef);
+              
+              if (snap.exists()) {
+                const d = snap.data();
+                Object.assign(window.db.state, { 
+                    students: d.students||[], 
+                    schedules: d.schedules||[], 
+                    coachRestDays: d.coachRestDays||[], 
+                    coachRestSlots: d.coachRestSlots||[]
+                });
+                if (d.coachPasscode) window.db.state.coachPasscode = d.coachPasscode;
+                
+                window.db.state.syncKey = key;
+                window.db.state.isAutoSync = true;
+                window.db.save(false); // 本地保存，不觸發上傳
+                window.db.setupSync(key);
+                
+                if (!silent) Utils.showToast("☁️ 雲端備份載入同步完成！", "success");
+                return true;
+              } else {
+                // 如果雲端沒有這個密鑰的檔案，就創建一個
+                if (!silent) Utils.showToast("🔍 雲端尚無此密鑰，已建立同步端點...", "info");
+                await setDoc(docRef, {
+                  students: window.db.state.students,
+                  schedules: window.db.state.schedules,
+                  coachRestDays: window.db.state.coachRestDays,
+                  coachRestSlots: window.db.state.coachRestSlots,
+                  coachPasscode: window.db.state.coachPasscode || '8888',
+                  updatedAt: Date.now()
+                });
+                window.db.setupSync(key);
+                return true;
+              }
+            } catch(e) {
+              console.error("Firestore Pull Error:", e);
+              if (!silent) Utils.showToast("雲端連線失敗，請檢查網路狀態", "error");
+              return false;
+            }
+          };
+
+          // 實時監聽 (Live Listener)
+          window.db.setupSync = (key) => {
+            if (window.db.activeUnsubscribe) { window.db.activeUnsubscribe(); window.db.activeUnsubscribe = null; }
+            if (!key) return;
+            
+            window.db.activeUnsubscribe = onSnapshot(doc(fstore, 'artifacts', 'kanswim-314d1', 'public', 'data', 'coach_baskets', key), (snap) => {
+              if (snap.exists() && !snap.metadata.hasPendingWrites) {
+                const d = snap.data();
+                // 只有當雲端資料比本地新，或是目前為學生唯讀端時，才執行覆寫
+                if (IS_STUDENT_MODE || !d.updatedAt || d.updatedAt > window.db.lastLocalWrite) {
+                  Object.assign(window.db.state, { 
+                      students: d.students||[], 
+                      schedules: d.schedules||[], 
+                      coachRestDays: d.coachRestDays||[], 
+                      coachRestSlots: d.coachRestSlots||[] 
+                  });
+                  if (d.coachPasscode) window.db.state.coachPasscode = d.coachPasscode;
+                  
+                  localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(window.db.state)); 
+                  window.db.notify();
+                }
+              }
+            });
+          };
+          
+          // 強制上推 (Force Push)
+          window.firestore_push = async () => {
+            if (auth.currentUser) {
+                await setDoc(doc(fstore, 'artifacts', 'kanswim-314d1', 'public', 'data', 'coach_baskets', window.db.state.syncKey), { 
+                    ...window.db.state, 
+                    updatedAt: Date.now() 
+                });
+            }
+          };
+          
+          // 初始化時根據設定掛載監聽器
+          if (IS_STUDENT_MODE && STUDENT_SYNC_KEY) {
+              window.db.setupSync(STUDENT_SYNC_KEY); 
+          } else if (window.db.state.isAutoSync && window.db.state.syncKey) {
+              window.db.setupSync(window.db.state.syncKey);
+          }
+        });
+      } catch (e) {
+          console.warn("Firebase Init Blocked (Maybe adblocker): ", e);
+      }
+    };
+    
+    initFirebaseSync();
+  </script>
+</body>
+</html>
