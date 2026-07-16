@@ -558,50 +558,14 @@
           Utils.showToast("已更新同步目標日曆！", "success"); 
       }
 
-      initGoogleAuthSDK() {
+initGoogleAuthSDK() {
         if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")) return;
         try {
           if (typeof google === 'undefined' || !google.accounts) return;
-          this.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: GOOGLE_CLIENT_ID, scope: 'https://www.googleapis.com/auth/calendar',
-            callback: async (resp) => {
-              if (resp.error) return Utils.showToast("Google 授權失敗", "error");
-              localStorage.setItem('swim_google_token', resp.access_token); 
-              localStorage.setItem('swim_google_token_expiry', Date.now() + (resp.expires_in * 1000));
-              this.store.state.googleConnected = true; 
-              await this.fetchGoogleUserProfile(resp.access_token); 
-              await this.fetchGoogleCalendars(resp.access_token);
-              this.store.save(false); 
-              this.render(); 
-              Utils.showToast("🔓 Google 日曆同步啟用！", "success");
-            }
-          });
+          // 統一改由下方動態建立，防止靜態初始化回調失效
         } catch (e) {
             console.error("Google Auth Init Error:", e);
         }
-      }
-      
-      async fetchGoogleUserProfile(token) {
-        try { 
-            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { 'Authorization': `Bearer ${token}` } }); 
-            if (res.ok) { 
-                const data = await res.json(); 
-                this.store.state.googleEmail = data.email || "已授權帳號"; 
-            } 
-        } catch (e) {}
-      }
-      
-      async fetchGoogleCalendars(token) {
-        try {
-          const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', { headers: { 'Authorization': `Bearer ${token}` } });
-          if (res.ok) {
-            const data = await res.json();
-            this.store.state.googleCalendars = data.items.map(c => ({ id: c.id, summary: c.summary, primary: c.primary }));
-            if (!this.store.state.selectedCalendarId && data.items.length > 0) {
-              this.store.state.selectedCalendarId = data.items.find(c => c.primary)?.id || 'primary';
-            }
-          }
-        } catch (e) {}
       }
 
       async getValidGoogleToken() {
@@ -610,18 +574,20 @@
         if (token && Date.now() < (expiry - 60000)) return token;
         
         return new Promise(async (resolve) => {
-          if (!this.tokenClient) {
-             if (typeof google === 'undefined' || !google.accounts) await Utils.loadScript('https://accounts.google.com/gsi/client');
-             this.initGoogleAuthSDK();
+          if (typeof google === 'undefined' || !google.accounts) {
+             await Utils.loadScript('https://accounts.google.com/gsi/client');
           }
-          if (!this.tokenClient) return resolve(null);
-          this.tokenClient.callback = (resp) => {
-            if (resp.error) return resolve(null);
-            localStorage.setItem('swim_google_token', resp.access_token); 
-            localStorage.setItem('swim_google_token_expiry', Date.now() + (resp.expires_in * 1000)); 
-            resolve(resp.access_token);
-          };
-          this.tokenClient.requestAccessToken({ prompt: '' });
+          const tempClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID.trim(),
+            scope: 'https://www.googleapis.com/auth/calendar email profile openid',
+            callback: (resp) => {
+              if (resp.error) return resolve(null);
+              localStorage.setItem('swim_google_token', resp.access_token); 
+              localStorage.setItem('swim_google_token_expiry', Date.now() + (resp.expires_in * 1000)); 
+              resolve(resp.access_token);
+            }
+          });
+          tempClient.requestAccessToken({ prompt: '' });
         });
       }
 
@@ -637,58 +603,72 @@
           this.render();
         } else {
           if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")) return Utils.showToast("請在原始碼上方填入您的 GOOGLE_CLIENT_ID", "error");
-          if (!this.tokenClient) {
-            Utils.showToast("正在喚醒 Google 授權模組...", "info");
-            try {
-              if (typeof google === 'undefined' || !google.accounts) {
-                 await Utils.loadScript('https://accounts.google.com/gsi/client');
+          
+          Utils.showToast("正在喚醒 Google 授權...", "info");
+          try {
+            if (typeof google === 'undefined' || !google.accounts) {
+               await Utils.loadScript('https://accounts.google.com/gsi/client');
+            }
+            
+            // 🚀 核心修復：點擊時動態生成具有完整 Profile 權限的驗證客戶端，確保 Callback 100% 執行
+            const freshClient = google.accounts.oauth2.initTokenClient({
+              client_id: GOOGLE_CLIENT_ID.trim(),
+              scope: 'https://www.googleapis.com/auth/calendar email profile openid',
+              callback: async (resp) => {
+                if (resp.error) {
+                    Utils.showToast("授權未完成或被取消", "error");
+                    return;
+                }
+                Utils.showToast("授權成功，正在讀取日曆...", "info");
+                localStorage.setItem('swim_google_token', resp.access_token); 
+                localStorage.setItem('swim_google_token_expiry', Date.now() + (resp.expires_in * 1000));
+                this.store.state.googleConnected = true; 
+                await this.fetchGoogleUserProfile(resp.access_token); 
+                await this.fetchGoogleCalendars(resp.access_token);
+                this.store.save(false); 
+                this.render(); 
+                Utils.showToast("🔓 Google 日曆已成功連結！", "success");
               }
-              this.initGoogleAuthSDK();
-            } catch(e) {}
+            });
+            
+            freshClient.requestAccessToken({ prompt: 'consent' });
+            
+          } catch(e) {
+             Utils.showToast("Google 模組載入失敗，請重整網頁", "error");
           }
-          if (!this.tokenClient) return Utils.showToast("Google 模組載入失敗，請重整網頁或關閉擋廣告外掛", "error");
-          this.tokenClient.requestAccessToken({ prompt: 'consent' });
         }
       }
 
       async syncScheduleToGoogle(sch) {
-        const token = await this.getValidGoogleToken(); 
-        if (!token) return;
+        const token = await this.getValidGoogleToken(); if (!token) return;
         const [start, end] = sch.timeSlot.split(' - ');
         const calId = encodeURIComponent(this.store.state.selectedCalendarId || 'primary');
         try {
           const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events`, {
             method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ summary: `🏊 ${this.store.getScheduleStudentName(sch)}`, location: sch.pool, description: `費用: $${sch.amount} HKD`, start: { dateTime: `${sch.date}T${start}:00+08:00`, timeZone: "Asia/Hong_Kong" }, end: { dateTime: `${sch.date}T${end}:00+08:00`, timeZone: "Asia/Hong_Kong" } })
+            body: JSON.stringify({ summary: this.store.getScheduleStudentName(sch), location: sch.pool, description: `費用: $${sch.amount} HKD`, start: { dateTime: `${sch.date}T${start}:00+08:00`, timeZone: "Asia/Hong_Kong" }, end: { dateTime: `${sch.date}T${end}:00+08:00`, timeZone: "Asia/Hong_Kong" } })
           });
-          if (res.ok) { 
-              sch.googleEventId = (await res.json()).id; 
-              this.store.save(false); 
-          }
+          if (res.ok) { sch.googleEventId = (await res.json()).id; this.store.save(false); }
         } catch (e) {}
       }
 
       async syncEditToGoogle(sch) {
         if (!sch.googleEventId) return this.syncScheduleToGoogle(sch);
-        const token = await this.getValidGoogleToken(); 
-        if (!token) return;
+        const token = await this.getValidGoogleToken(); if (!token) return;
         const [start, end] = sch.timeSlot.split(' - ');
         const calId = encodeURIComponent(this.store.state.selectedCalendarId || 'primary');
         try {
           await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${sch.googleEventId}`, {
             method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ summary: `🏊 ${this.store.getScheduleStudentName(sch)}`, location: sch.pool, description: `費用: $${sch.amount} HKD`, start: { dateTime: `${sch.date}T${start}:00+08:00`, timeZone: "Asia/Hong_Kong" }, end: { dateTime: `${sch.date}T${end}:00+08:00`, timeZone: "Asia/Hong_Kong" } })
+            body: JSON.stringify({ summary: this.store.getScheduleStudentName(sch), location: sch.pool, description: `費用: $${sch.amount} HKD`, start: { dateTime: `${sch.date}T${start}:00+08:00`, timeZone: "Asia/Hong_Kong" }, end: { dateTime: `${sch.date}T${end}:00+08:00`, timeZone: "Asia/Hong_Kong" } })
           });
         } catch (e) {}
       }
 
       async syncDeleteToGoogle(sch) {
-        const token = await this.getValidGoogleToken(); 
-        if (!token || !sch.googleEventId) return;
+        const token = await this.getValidGoogleToken(); if (!token || !sch.googleEventId) return;
         const calId = encodeURIComponent(this.store.state.selectedCalendarId || 'primary');
-        try { 
-            await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${sch.googleEventId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); 
-        } catch (e) {}
+        try { await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${sch.googleEventId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); } catch (e) {}
       }
 
       async syncAllExistingToGoogle() {
@@ -702,7 +682,7 @@
         for (let sch of this.store.state.schedules) {
           const [start, end] = sch.timeSlot.split(' - ');
           const eventBody = { 
-            summary: `🏊 ${this.store.getScheduleStudentName(sch)}`, 
+            summary: this.store.getScheduleStudentName(sch), 
             location: sch.pool, 
             description: `費用: $${sch.amount} HKD`, 
             start: { dateTime: `${sch.date}T${start}:00+08:00`, timeZone: "Asia/Hong_Kong" }, 
