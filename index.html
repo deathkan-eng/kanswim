@@ -1137,7 +1137,7 @@ initGoogleAuthSDK() {
               const ms = s.isMerged ? s.mergedStudents.find(m => m.studentId === TARGET_STUDENT_ID) : null;
               const isPaid = ms ? ms.paid : s.paid;
               const amt = ms ? ms.amount : s.amount;
-              let detailTitle = '🏊 游泳課';
+              let detailTitle = '';
               if (s.isMerged && s.mergedStudents) {
                   const names = s.mergedStudents.map(m => {
                     const st = students.find(x => x.id === m.studentId);
@@ -1145,7 +1145,7 @@ initGoogleAuthSDK() {
                     if (m.studentId === TARGET_STUDENT_ID) return privacyMask ? Utils.maskName(st.name) : st.name;
                     return privacyMask ? Utils.maskName(st.name) : st.name;
                   }).filter(Boolean).join(' + ');
-                  detailTitle = `🏊 游泳課 - ${names}`;
+                  detailTitle = `{names}`;
               }
               listHTML += `<div class="detail-sch-card border-blue-200 bg-blue-50/50"><div class="flex gap-4 items-center"><div class="p-3 bg-blue-100 rounded-2xl text-blue-600"><i data-lucide="check-circle" class="w-6 h-6"></i></div><div class="flex-grow"><div class="font-extrabold text-blue-800 text-base">${detailTitle}</div><div class="text-xs mt-1 text-blue-600/80">${s.timeSlot} · ${s.pool}</div></div></div><div class="mt-4 pt-4 border-t border-blue-100 flex justify-between items-center"><span class="${isPaid ? 'badge-paid' : 'badge-unpaid'}">${isPaid ? '已付訖' : '待付款'}</span><span class="font-black text-blue-900">$${amt}</span></div></div>`;
             } else {
