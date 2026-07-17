@@ -32,19 +32,16 @@
     .cal-cell-box.drag-hover { border-color: var(--sys-accent) !important; background-color: #eff6ff !important; box-shadow: inset 0 0 0 2px var(--sys-accent) !important; transform: scale(1.02); z-index: 20; }
     @media (min-width: 640px) { .cal-cell-box { min-height: 110px; padding: 8px; } }
 
-    /* 特殊樣式 */
     .rest-day-pattern { background: repeating-linear-gradient(45deg, #fffbeb, #fffbeb 10px, #fef3c7 10px, #fef3c7 20px); border-color: #fde68a !important; }
     .conflict-border { border: 2px dashed var(--sys-danger) !important; background-color: #fef2f2 !important; }
     .drag-avatar { position: fixed; pointer-events: none; z-index: 9999; opacity: 0.95; transform: scale(1.05); box-shadow: 0 20px 40px rgba(0,0,0,0.15); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); border: 1px solid var(--sys-accent); border-radius: 12px; }
 
-    /* 徽章與狀態點 */
     .compact-badge { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--sys-border); border-radius: 6px; padding: 4px; font-size: 9px; font-weight: 700; width: 100%; box-shadow: 0 1px 2px rgba(0,0,0,0.02); transition: all 0.15s; }
     .badge-paid { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
     .badge-unpaid { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; cursor: pointer; transition: all 0.2s; }
     .status-dot-paid { width: 6px; height: 6px; background-color: var(--sys-success); border-radius: 50%; box-shadow: 0 0 3px var(--sys-success); }
     .status-dot-unpaid { width: 6px; height: 6px; background-color: var(--sys-warning); border-radius: 50%; box-shadow: 0 0 3px var(--sys-warning); }
 
-    /* 詳情頁明細卡片 */
     .detail-sch-card { background: var(--sys-card); border: 1px solid var(--sys-border); border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); transition: all 0.2s; }
     .detail-sch-card:hover { border-color: #cbd5e1; box-shadow: 0 6px 20px rgba(0,0,0,0.06); }
     .dark-icon-btn { padding: 8px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; transition: all 0.2s; cursor: pointer; }
@@ -95,10 +92,9 @@
     import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // ==========================================
-    // 🔑 Google API 憑證 (請將您的金鑰貼在引號內)
+    // 🔑 Google API 憑證 
     // ==========================================
     const GOOGLE_CLIENT_ID = "637904769497-jnvfvkt6jaoah0guad6sd50ptmdp8ah6.apps.googleusercontent.com"; 
-    const GOOGLE_API_KEY = "AIzaSyAND0ztqMRZtaOjWx105RFalDwJ-jgaGaY";   
 
     const urlParams = new URLSearchParams(window.location.search);
     const IS_STUDENT_MODE = urlParams.get('mode') === 'student';
@@ -311,32 +307,20 @@
     class AppController {
       constructor(store) {
         this.store = store;
-        this.touchStartX = 0; 
-        this.touchStartY = 0; 
-        this.touchStartTimer = null; 
-        this.activeDragSchId = null; 
-        this.isDraggingActive = false;
-        this.addMode = 'single'; 
-        this.splitMode = 'total'; 
-        this.selectedMergedStudents = []; 
-        this.swipeStartX = null; 
-        this.swipeStartY = null;
-        this.tokenClient = null;
+        this.touchStartX = 0; this.touchStartY = 0; this.touchStartTimer = null; 
+        this.activeDragSchId = null; this.isDraggingActive = false;
+        this.addMode = 'single'; this.splitMode = 'total'; this.selectedMergedStudents = []; 
+        this.swipeStartX = null; this.swipeStartY = null;
         
         this.store.subscribe(() => this.render());
-        if (document.readyState === 'loading') { 
-            document.addEventListener('DOMContentLoaded', () => this.init()); 
-        } else { 
-            this.init(); 
-        }
+        if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', () => this.init()); } else { this.init(); }
       }
 
       init() {
         if (IS_STUDENT_MODE) {
           const h = document.getElementById('admin-header');
           const n = document.getElementById('admin-nav');
-          if (h) h.style.display = 'none'; 
-          if (n) n.style.display = 'none';
+          if (h) h.style.display = 'none'; if (n) n.style.display = 'none';
         }
         this.initGoogleAuthSDK();
         this.render();
@@ -387,22 +371,10 @@
         }
       }
 
-      closeModal() {
-        const m = document.getElementById('modal-container');
-        if (m) m.innerHTML = '';
-      }
+      closeModal() { const m = document.getElementById('modal-container'); if (m) m.innerHTML = ''; }
 
-      executeDeleteStudent(id) { 
-          this.store.deleteStudent(id); 
-          this.closeModal(); 
-          this.render(); 
-      }
-      
-      async executeDeleteSchedule(id) { 
-          await this.store.deleteSchedule(id); 
-          this.closeModal(); 
-          this.render(); 
-      }
+      executeDeleteStudent(id) { this.store.deleteStudent(id); this.closeModal(); this.render(); }
+      async executeDeleteSchedule(id) { await this.store.deleteSchedule(id); this.closeModal(); this.render(); }
       
       executeLoadDemo() {
         this.store.state.students = [
@@ -414,54 +386,26 @@
             { id: 'sch_1', studentId: 'st_3', date: '2026-06-27', timeSlot: '10:30 - 11:30', pool: '荔枝角游泳池', amount: 350, paid: false, googleEventId: null }, 
             { id: 'sch_2', studentId: 'st_1', date: '2026-06-29', timeSlot: '14:00 - 15:00', pool: '小西灣游泳池', amount: 350, paid: false, googleEventId: null }
         ]; 
-        this.store.save(true); 
-        this.closeModal(); 
-        Utils.showToast("載入演示數據成功！", "success");
+        this.store.save(true); this.closeModal(); Utils.showToast("載入演示數據成功！", "success");
       }
       
-      executeClearDatabase() { 
-        this.store.state.students = []; 
-        this.store.state.schedules = []; 
-        this.store.state.coachRestDays = []; 
-        this.store.state.coachRestSlots = []; 
-        this.store.save(true); 
-        this.closeModal(); 
-        Utils.showToast("資料已完全抹除", "error"); 
-      }
+      executeClearDatabase() { this.store.state.students = []; this.store.state.schedules = []; this.store.state.coachRestDays = []; this.store.state.coachRestSlots = []; this.store.save(true); this.closeModal(); Utils.showToast("資料已完全抹除", "error"); }
 
-      quickSettleStudent(id) { 
-          this.store.markStudentPaidForMonthAndPrevious(id, this.store.state.currYear, this.store.state.currMonth); 
-          this.render(); 
-      }
-      
-      setDashboardSubTab(sub) { 
-          this.store.setDashboardSubTab(sub); 
-      }
-      
-      toggleSmsDrawer(studentId) { 
-          const drawer = document.getElementById(`sms-drawer-${studentId}`); 
-          if (drawer) drawer.classList.toggle('hidden'); 
-      }
+      quickSettleStudent(id) { this.store.markStudentPaidForMonthAndPrevious(id, this.store.state.currYear, this.store.state.currMonth); this.render(); }
+      setDashboardSubTab(sub) { this.store.setDashboardSubTab(sub); }
+      toggleSmsDrawer(studentId) { const drawer = document.getElementById(`sms-drawer-${studentId}`); if (drawer) drawer.classList.toggle('hidden'); }
       
       copySMS(studentId) {
         const el = document.getElementById(`sms-${studentId}`);
         if (el) {
-          const ta = document.createElement("textarea"); 
-          ta.value = el.innerText; 
-          ta.style.position = "fixed"; 
-          ta.style.opacity = "0";
-          document.body.appendChild(ta); 
-          ta.focus(); 
-          ta.select(); 
-          document.execCommand('copy'); 
-          document.body.removeChild(ta);
+          const ta = document.createElement("textarea"); ta.value = el.innerText; ta.style.position = "fixed"; ta.style.opacity = "0";
+          document.body.appendChild(ta); ta.focus(); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
           Utils.showToast("簡訊範本複製成功！", "success");
         }
       }
 
       openShareLinkModal(studentId) {
-        const student = this.store.state.students.find(s => s.id === studentId); 
-        if (!student) return;
+        const student = this.store.state.students.find(s => s.id === studentId); if (!student) return;
         const shareUrl = `${window.location.href.split('?')[0]}?mode=student&key=${encodeURIComponent(this.store.state.syncKey)}&st=${encodeURIComponent(studentId)}`;
         const m = document.getElementById('modal-container');
         if (m) {
@@ -470,102 +414,30 @@
         }
       }
 
-      copyShareLinkToClipboard() { 
-          const el = document.getElementById('share-link-input'); 
-          if (el) { 
-              el.select(); 
-              document.execCommand('copy'); 
-              Utils.showToast("🔗 連結複製成功！", "success"); 
-          } 
-      }
+      copyShareLinkToClipboard() { const el = document.getElementById('share-link-input'); if (el) { el.select(); document.execCommand('copy'); Utils.showToast("🔗 連結複製成功！", "success"); } }
       
-      generateNewKey() { 
-          const newKey = 'swim-' + Math.random().toString(36).substr(2, 6); 
-          const input = document.getElementById('fs-synckey'); 
-          if (input) input.value = newKey; 
-          this.store.state.syncKey = newKey; 
-          this.store.save(false); 
-          Utils.showToast("同步密鑰已更新！", "success"); 
-      }
-      
-      toggleAutoSync(checked) { 
-          this.store.state.isAutoSync = checked; 
-          this.store.save(false); 
-          if (checked) this.store.uploadToCloud(); 
-      }
-      
-      async testAndPullCloud() { 
-          const inputKey = document.getElementById('fs-synckey')?.value.trim(); 
-          if (!inputKey) return Utils.showToast("請輸入同步密鑰", "error"); 
-          Utils.showToast("連線拉取雲端備份...", "info"); 
-          const success = await this.store.downloadFromCloud(inputKey); 
-          if (success) Utils.showToast("同步拉取成功！", "success"); 
-          else Utils.showToast("無此密鑰備份或連線失敗", "error"); 
-      }
-      
-      forcePushCloud() { 
-          const inputKey = document.getElementById('fs-synckey')?.value.trim(); 
-          if (!inputKey) return Utils.showToast("請輸入同步密鑰", "error"); 
-          this.store.state.syncKey = inputKey; 
-          this.store.state.isAutoSync = true; 
-          this.store.save(true); 
-          Utils.showToast("強制上傳中...", "info"); 
-          this.store.uploadToCloud(); 
-      }
+      generateNewKey() { const newKey = 'swim-' + Math.random().toString(36).substr(2, 6); const input = document.getElementById('fs-synckey'); if (input) input.value = newKey; this.store.state.syncKey = newKey; this.store.save(false); Utils.showToast("同步密鑰已更新！", "success"); }
+      toggleAutoSync(checked) { this.store.state.isAutoSync = checked; this.store.save(false); if (checked) this.store.uploadToCloud(); }
+      async testAndPullCloud() { const inputKey = document.getElementById('fs-synckey')?.value.trim(); if (!inputKey) return Utils.showToast("請輸入同步密鑰", "error"); Utils.showToast("連線拉取雲端備份...", "info"); const success = await this.store.downloadFromCloud(inputKey); if (success) Utils.showToast("同步拉取成功！", "success"); else Utils.showToast("無此密鑰備份或連線失敗", "error"); }
+      forcePushCloud() { const inputKey = document.getElementById('fs-synckey')?.value.trim(); if (!inputKey) return Utils.showToast("請輸入同步密鑰", "error"); this.store.state.syncKey = inputKey; this.store.state.isAutoSync = true; this.store.save(true); Utils.showToast("強制上傳中...", "info"); this.store.uploadToCloud(); }
       
       importBackup(input) { 
-        const file = input.files[0]; 
-        if (!file) return; 
-        const reader = new FileReader(); 
+        const file = input.files[0]; if (!file) return; const reader = new FileReader(); 
         reader.onload = (e) => { 
-            try { 
-                const raw = JSON.parse(e.target.result); 
-                if (raw && (raw.students || raw.schedules)) { 
-                    Object.assign(this.store.state, raw); 
-                    this.store.save(true); 
-                    Utils.showToast("備份檔匯入還原成功！", "success"); 
-                    this.render(); 
-                } else {
-                    Utils.showToast("格式不符！", "error"); 
-                }
-            } catch (err) { 
-                Utils.showToast("檔案錯誤！", "error"); 
-            } 
+            try { const raw = JSON.parse(e.target.result); if (raw && (raw.students || raw.schedules)) { Object.assign(this.store.state, raw); this.store.save(true); Utils.showToast("備份檔匯入還原成功！", "success"); this.render(); } else { Utils.showToast("格式不符！", "error"); } } catch (err) { Utils.showToast("檔案錯誤！", "error"); } 
             input.value=''; 
-        }; 
-        reader.readAsText(file); 
+        }; reader.readAsText(file); 
       }
 
-      loadDemoData() { 
-          const m = document.getElementById('modal-container'); 
-          if (m) { 
-              m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-5 shadow-2xl text-center"><i data-lucide="sparkles" class="w-12 h-12 text-blue-500 mx-auto mb-3"></i><h3 class="font-bold text-sm mb-2">載入測試數據？</h3><p class="text-xs text-slate-500 mb-6">將覆蓋目前資料，確認載入？</p><div class="flex gap-2"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeLoadDemo()" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold">確認</button></div></div></div>`; 
-              Utils.renderIcons(); 
-          } 
-      }
-      
-      clearDatabaseConfirm() { 
-          const m = document.getElementById('modal-container'); 
-          if (m) { 
-              m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-5 shadow-2xl text-center"><i data-lucide="alert-triangle" class="w-12 h-12 text-rose-500 mx-auto mb-3"></i><h3 class="font-bold text-sm mb-2">確認抹除所有資料？</h3><div class="flex gap-2 mt-4"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeClearDatabase()" class="flex-1 py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold">抹除</button></div></div></div>`; 
-              Utils.renderIcons(); 
-          } 
-      }
-      
-      selectGoogleCalendar(id) { 
-          this.store.state.selectedCalendarId = id; 
-          this.store.save(false); 
-          Utils.showToast("已更新同步目標日曆！", "success"); 
-      }
+      loadDemoData() { const m = document.getElementById('modal-container'); if (m) { m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-5 shadow-2xl text-center"><i data-lucide="sparkles" class="w-12 h-12 text-blue-500 mx-auto mb-3"></i><h3 class="font-bold text-sm mb-2">載入測試數據？</h3><p class="text-xs text-slate-500 mb-6">將覆蓋目前資料，確認載入？</p><div class="flex gap-2"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeLoadDemo()" class="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold">確認</button></div></div></div>`; Utils.renderIcons(); } }
+      clearDatabaseConfirm() { const m = document.getElementById('modal-container'); if (m) { m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-5 shadow-2xl text-center"><i data-lucide="alert-triangle" class="w-12 h-12 text-rose-500 mx-auto mb-3"></i><h3 class="font-bold text-sm mb-2">確認抹除所有資料？</h3><div class="flex gap-2 mt-4"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeClearDatabase()" class="flex-1 py-2.5 bg-rose-600 text-white rounded-xl text-xs font-bold">抹除</button></div></div></div>`; Utils.renderIcons(); } }
+      selectGoogleCalendar(id) { this.store.state.selectedCalendarId = id; this.store.save(false); Utils.showToast("已更新同步目標日曆！", "success"); }
 
-initGoogleAuthSDK() {
+      initGoogleAuthSDK() {
         if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")) return;
         try {
           if (typeof google === 'undefined' || !google.accounts) return;
-          // 統一改由下方動態建立，防止靜態初始化回調失效
-        } catch (e) {
-            console.error("Google Auth Init Error:", e);
-        }
+        } catch (e) { console.error("Google Auth Init Error:", e); }
       }
 
       async getValidGoogleToken() {
@@ -574,9 +446,7 @@ initGoogleAuthSDK() {
         if (token && Date.now() < (expiry - 60000)) return token;
         
         return new Promise(async (resolve) => {
-          if (typeof google === 'undefined' || !google.accounts) {
-             await Utils.loadScript('https://accounts.google.com/gsi/client');
-          }
+          if (typeof google === 'undefined' || !google.accounts) { await Utils.loadScript('https://accounts.google.com/gsi/client'); }
           const tempClient = google.accounts.oauth2.initTokenClient({
             client_id: GOOGLE_CLIENT_ID.trim(),
             scope: 'https://www.googleapis.com/auth/calendar email profile openid',
@@ -591,51 +461,61 @@ initGoogleAuthSDK() {
         });
       }
 
+      async fetchGoogleUserProfile(token) {
+        try {
+          const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { 'Authorization': `Bearer ${token}` } });
+          if (res.ok) { const data = await res.json(); this.store.state.googleEmail = data.email || "已授權帳號"; }
+        } catch (e) { console.error("Fetch Profile Error:", e); }
+      }
+
+      async fetchGoogleCalendars(token) {
+        try {
+          // 強制讀取該帳號下所有可寫入的日曆清單 (minAccessRole=writer) 以避免被唯讀日曆阻擋
+          const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=writer', { headers: { 'Authorization': `Bearer ${token}` } });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.items) {
+              this.store.state.googleCalendars = data.items.map(c => ({ id: c.id, summary: c.summary, primary: c.primary || false }));
+              // 若當前選擇的日曆已不在清單內，自動退回主日曆
+              if (!this.store.state.googleCalendars.some(c => c.id === this.store.state.selectedCalendarId)) {
+                const primaryCal = this.store.state.googleCalendars.find(c => c.primary);
+                this.store.state.selectedCalendarId = primaryCal ? primaryCal.id : 'primary';
+              }
+            }
+          }
+        } catch (e) { console.error("Fetch Calendars Error:", e); }
+      }
+
       async toggleGoogleCalendarConnection() {
         if (this.store.state.googleConnected) {
-          localStorage.removeItem('swim_google_token'); 
-          localStorage.removeItem('swim_google_token_expiry');
-          this.store.state.googleConnected = false; 
-          this.store.state.googleEmail = ""; 
-          this.store.state.googleCalendars = []; 
-          this.store.save(false); 
-          Utils.showToast("已斷開 Google 日曆。"); 
-          this.render();
+          localStorage.removeItem('swim_google_token'); localStorage.removeItem('swim_google_token_expiry');
+          this.store.state.googleConnected = false; this.store.state.googleEmail = ""; this.store.state.googleCalendars = []; 
+          this.store.save(false); Utils.showToast("已斷開 Google 日曆。"); this.render();
         } else {
           if (!GOOGLE_CLIENT_ID || GOOGLE_CLIENT_ID.startsWith("YOUR_")) return Utils.showToast("請在原始碼上方填入您的 GOOGLE_CLIENT_ID", "error");
-          
           Utils.showToast("正在喚醒 Google 授權...", "info");
           try {
-            if (typeof google === 'undefined' || !google.accounts) {
-               await Utils.loadScript('https://accounts.google.com/gsi/client');
-            }
+            if (typeof google === 'undefined' || !google.accounts) { await Utils.loadScript('https://accounts.google.com/gsi/client'); }
             
-            // 🚀 核心修復：點擊時動態生成具有完整 Profile 權限的驗證客戶端，確保 Callback 100% 執行
             const freshClient = google.accounts.oauth2.initTokenClient({
               client_id: GOOGLE_CLIENT_ID.trim(),
               scope: 'https://www.googleapis.com/auth/calendar email profile openid',
               callback: async (resp) => {
-                if (resp.error) {
-                    Utils.showToast("授權未完成或被取消", "error");
-                    return;
-                }
+                if (resp.error) { Utils.showToast("授權未完成或被取消", "error"); return; }
                 Utils.showToast("授權成功，正在讀取日曆...", "info");
-                localStorage.setItem('swim_google_token', resp.access_token); 
-                localStorage.setItem('swim_google_token_expiry', Date.now() + (resp.expires_in * 1000));
+                localStorage.setItem('swim_google_token', resp.access_token); localStorage.setItem('swim_google_token_expiry', Date.now() + (resp.expires_in * 1000));
                 this.store.state.googleConnected = true; 
+                
+                // 執行缺少的獲取資訊函數
                 await this.fetchGoogleUserProfile(resp.access_token); 
                 await this.fetchGoogleCalendars(resp.access_token);
-                this.store.save(false); 
-                this.render(); 
+                
+                this.store.save(false); this.render(); 
                 Utils.showToast("🔓 Google 日曆已成功連結！", "success");
               }
             });
-            
             freshClient.requestAccessToken({ prompt: 'consent' });
-            
-          } catch(e) {
-             Utils.showToast("Google 模組載入失敗，請重整網頁", "error");
-          }
+          } catch(e) { Utils.showToast("Google 模組載入失敗，請重整網頁", "error"); }
         }
       }
 
@@ -672,222 +552,103 @@ initGoogleAuthSDK() {
       }
 
       async syncAllExistingToGoogle() {
-        const token = await this.getValidGoogleToken(); 
-        if (!token) return Utils.showToast("請先連結 Google 帳號！", "error");
-        
-        Utils.showToast("開始批次同步並轉移課堂...", "info"); 
-        let count = 0;
+        const token = await this.getValidGoogleToken(); if (!token) return Utils.showToast("請先連結 Google 帳號！", "error");
+        Utils.showToast("開始批次同步並轉移課堂...", "info"); let count = 0;
         const calId = encodeURIComponent(this.store.state.selectedCalendarId || 'primary');
         
         for (let sch of this.store.state.schedules) {
           const [start, end] = sch.timeSlot.split(' - ');
-          const eventBody = { 
-            summary: this.store.getScheduleStudentName(sch), 
-            location: sch.pool, 
-            description: `費用: $${sch.amount} HKD`, 
-            start: { dateTime: `${sch.date}T${start}:00+08:00`, timeZone: "Asia/Hong_Kong" }, 
-            end: { dateTime: `${sch.date}T${end}:00+08:00`, timeZone: "Asia/Hong_Kong" } 
-          };
+          const eventBody = { summary: this.store.getScheduleStudentName(sch), location: sch.pool, description: `費用: $${sch.amount} HKD`, start: { dateTime: `${sch.date}T${start}:00+08:00`, timeZone: "Asia/Hong_Kong" }, end: { dateTime: `${sch.date}T${end}:00+08:00`, timeZone: "Asia/Hong_Kong" } };
 
           if (sch.googleEventId) {
             try {
-              const updateRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${sch.googleEventId}`, {
-                method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(eventBody)
-              });
+              const updateRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events/${sch.googleEventId}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(eventBody) });
               if (updateRes.ok) { count++; continue; }
               if (updateRes.status === 404) {
-                 const createRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events`, {
-                    method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(eventBody)
-                 });
+                 const createRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(eventBody) });
                  if (createRes.ok) { sch.googleEventId = (await createRes.json()).id; count++; }
               }
             } catch (e) {}
           } else {
             try {
-              const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events`, {
-                method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(eventBody)
-              });
+              const res = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${calId}/events`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(eventBody) });
               if (res.ok) { sch.googleEventId = (await res.json()).id; count++; }
             } catch (e) {}
           }
         }
-        
-        if (count > 0) { 
-          this.store.save(true); 
-          Utils.showToast(`🎉 成功同步或轉移了 ${count} 堂課！`, "success"); 
-        } else {
-          Utils.showToast("所有課堂皆已在目標日曆中！", "info");
-        }
+        if (count > 0) { this.store.save(true); Utils.showToast(`🎉 成功同步或轉移了 ${count} 堂課！`, "success"); } else { Utils.showToast("所有課堂皆已在目標日曆中！", "info"); }
       }
 
-      togglePrivacyMask() { 
-          this.store.state.privacyMask = !this.store.state.privacyMask; 
-          this.store.save(false); 
-      }
+      togglePrivacyMask() { this.store.state.privacyMask = !this.store.state.privacyMask; this.store.save(false); }
+      updateStudentSearch(val) { this.store.state.studentSearchQuery = val; this.store.save(false); }
       
-      updateStudentSearch(val) { 
-          this.store.state.studentSearchQuery = val; 
-          this.store.save(false); 
-      }
-      
-      handleSwipeStart(e) { 
-          this.swipeStartX = e.touches[0].clientX; 
-          this.swipeStartY = e.touches[0].clientY; 
-      }
-      
+      handleSwipeStart(e) { this.swipeStartX = e.touches[0].clientX; this.swipeStartY = e.touches[0].clientY; }
       handleSwipeEnd(e) {
         if (!this.swipeStartX) return; 
-        const dx = e.changedTouches[0].clientX - this.swipeStartX;
-        const dy = e.changedTouches[0].clientY - this.swipeStartY;
-        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
-            dx > 0 ? this.store.prevMonth() : this.store.nextMonth();
-        }
-        this.swipeStartX = null; 
-        this.swipeStartY = null;
+        const dx = e.changedTouches[0].clientX - this.swipeStartX, dy = e.changedTouches[0].clientY - this.swipeStartY;
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) { dx > 0 ? this.store.prevMonth() : this.store.nextMonth(); }
+        this.swipeStartX = null; this.swipeStartY = null;
       }
       
       openAddScheduleModalWithTime(dateStr, startTime, endTime) {
-        this.store.setDate(dateStr); 
-        this.openAddScheduleModal();
+        this.store.setDate(dateStr); this.openAddScheduleModal();
         setTimeout(() => {
           if (startTime && endTime) {
-            document.getElementById('f-start-h').value = startTime.split(':')[0]; 
-            document.getElementById('f-start-m').value = startTime.split(':')[1];
-            document.getElementById('f-end-h').value = endTime.split(':')[0]; 
-            document.getElementById('f-end-m').value = endTime.split(':')[1];
+            document.getElementById('f-start-h').value = startTime.split(':')[0]; document.getElementById('f-start-m').value = startTime.split(':')[1];
+            document.getElementById('f-end-h').value = endTime.split(':')[0]; document.getElementById('f-end-m').value = endTime.split(':')[1];
             this.recalculateMergedFee();
           }
         }, 50);
       }
 
-      onDragStart(e, schId) { 
-          e.dataTransfer.setData('text/plain', schId); 
-          e.dataTransfer.effectAllowed = 'move'; 
-          this.activeDragSchId = schId; 
-      }
-      
-      onDragOver(e) { 
-          e.preventDefault(); 
-          const cell = e.target.closest('.cal-cell-box'); 
-          if (cell && !this.store.state.coachRestDays.includes(cell.getAttribute('data-date'))) cell.classList.add('drag-hover'); 
-      }
-      
-      onDragLeave(e) { 
-          const cell = e.target.closest('.cal-cell-box'); 
-          if (cell) cell.classList.remove('drag-hover'); 
-      }
-      
+      onDragStart(e, schId) { e.dataTransfer.setData('text/plain', schId); e.dataTransfer.effectAllowed = 'move'; this.activeDragSchId = schId; }
+      onDragOver(e) { e.preventDefault(); const cell = e.target.closest('.cal-cell-box'); if (cell && !this.store.state.coachRestDays.includes(cell.getAttribute('data-date'))) cell.classList.add('drag-hover'); }
+      onDragLeave(e) { const cell = e.target.closest('.cal-cell-box'); if (cell) cell.classList.remove('drag-hover'); }
       onDrop(e, targetDateStr) { 
-          e.preventDefault(); 
-          const cell = e.target.closest('.cal-cell-box'); 
-          if (cell) cell.classList.remove('drag-hover'); 
+          e.preventDefault(); const cell = e.target.closest('.cal-cell-box'); if (cell) cell.classList.remove('drag-hover'); 
           const schId = e.dataTransfer.getData('text/plain') || this.activeDragSchId; 
-          if (schId) { 
-              this.store.moveSchedule(schId, targetDateStr); 
-              this.activeDragSchId = null; 
-          } 
+          if (schId) { this.store.moveSchedule(schId, targetDateStr); this.activeDragSchId = null; } 
       }
 
       onTouchStart(e, schId) {
-        const touch = e.touches[0]; 
-        this.touchStartX = touch.clientX; 
-        this.touchStartY = touch.clientY; 
-        this.activeDragSchId = schId; 
-        this.isDraggingActive = false;
-        
+        const touch = e.touches[0]; this.touchStartX = touch.clientX; this.touchStartY = touch.clientY; this.activeDragSchId = schId; this.isDraggingActive = false;
         this.touchStartTimer = setTimeout(() => {
-          this.isDraggingActive = true; 
-          document.body.classList.add('drag-locked'); 
-          if (navigator.vibrate) navigator.vibrate(50);
-          
+          this.isDraggingActive = true; document.body.classList.add('drag-locked'); if (navigator.vibrate) navigator.vibrate(50);
           const targetCard = document.getElementById(`sch-card-${schId}`);
           if (targetCard) {
-            const avatar = document.createElement('div'); 
-            avatar.id = 'drag-avatar-preview'; 
-            avatar.className = 'drag-avatar p-3 rounded-xl text-xs font-bold text-blue-800 shadow-2xl'; 
-            avatar.innerHTML = targetCard.innerHTML; 
-            document.body.appendChild(avatar); 
-            this.updateAvatarPosition(touch.clientX, touch.clientY);
+            const avatar = document.createElement('div'); avatar.id = 'drag-avatar-preview'; avatar.className = 'drag-avatar p-3 rounded-xl text-xs font-bold text-blue-800 shadow-2xl'; 
+            avatar.innerHTML = targetCard.innerHTML; document.body.appendChild(avatar); this.updateAvatarPosition(touch.clientX, touch.clientY);
           }
         }, 400);
       }
-      
       onTouchMove(e) {
         const touch = e.touches[0]; 
-        if (!this.isDraggingActive) { 
-            if (Math.hypot(touch.clientX - this.touchStartX, touch.clientY - this.touchStartY) > 10) clearTimeout(this.touchStartTimer); 
-            return; 
-        }
-        e.preventDefault(); 
-        this.updateAvatarPosition(touch.clientX, touch.clientY);
-        
+        if (!this.isDraggingActive) { if (Math.hypot(touch.clientX - this.touchStartX, touch.clientY - this.touchStartY) > 10) clearTimeout(this.touchStartTimer); return; }
+        e.preventDefault(); this.updateAvatarPosition(touch.clientX, touch.clientY);
         const cell = document.elementFromPoint(touch.clientX, touch.clientY)?.closest('.cal-cell-box');
         document.querySelectorAll('.cal-cell-box').forEach(c => c.classList.remove('drag-hover'));
         if (cell && !this.store.state.coachRestDays.includes(cell.getAttribute('data-date'))) cell.classList.add('drag-hover');
       }
-      
       onTouchEnd(e) {
-        clearTimeout(this.touchStartTimer); 
-        document.body.classList.remove('drag-locked');
-        
-        const avatar = document.getElementById('drag-avatar-preview'); 
-        if (avatar) avatar.remove();
-        
+        clearTimeout(this.touchStartTimer); document.body.classList.remove('drag-locked');
+        const avatar = document.getElementById('drag-avatar-preview'); if (avatar) avatar.remove();
         document.querySelectorAll('.cal-cell-box').forEach(c => c.classList.remove('drag-hover'));
-        
         if (this.isDraggingActive && this.activeDragSchId) {
           const cell = document.elementFromPoint(e.changedTouches[0].clientX, e.changedTouches[0].clientY)?.closest('.cal-cell-box');
           if (cell) this.store.moveSchedule(this.activeDragSchId, cell.getAttribute('data-date'));
         }
-        this.isDraggingActive = false; 
-        this.activeDragSchId = null;
+        this.isDraggingActive = false; this.activeDragSchId = null;
       }
-      
-      updateAvatarPosition(x, y) { 
-          const avatar = document.getElementById('drag-avatar-preview'); 
-          if (avatar) { 
-              avatar.style.left = `${x - 60}px`; 
-              avatar.style.top = `${y - 40}px`; 
-          } 
-      }
+      updateAvatarPosition(x, y) { const avatar = document.getElementById('drag-avatar-preview'); if (avatar) { avatar.style.left = `${x - 60}px`; avatar.style.top = `${y - 40}px`; } }
 
-      initCopy(schId) { 
-          const f = this.store.state.schedules.find(s => s.id === schId); 
-          if (f) { 
-              this.store.state.copySource = f; 
-              this.store.save(false); 
-              Utils.showToast("已複製排堂，請點擊其他日期貼上。"); 
-          } 
-      }
-      
-      cancelCopy() { 
-          this.store.state.copySource = null; 
-          this.store.save(false); 
-          Utils.showToast("已結束課堂複製"); 
-      }
-      
+      initCopy(schId) { const f = this.store.state.schedules.find(s => s.id === schId); if (f) { this.store.state.copySource = f; this.store.save(false); Utils.showToast("已複製排堂，請點擊其他日期貼上。"); } }
+      cancelCopy() { this.store.state.copySource = null; this.store.save(false); Utils.showToast("已結束課堂複製"); }
       pasteToDate(dateStr) {
-        const src = this.store.state.copySource; 
-        if (!src) return;
-        
-        if (Utils.checkConflict(dateStr, src.timeSlot)) { 
-            Utils.showToast("⚠️ 複製失敗：時段衝突！", "error"); 
-            return; 
-        }
-        
+        const src = this.store.state.copySource; if (!src) return;
+        if (Utils.checkConflict(dateStr, src.timeSlot)) return Utils.showToast("⚠️ 複製失敗：時段衝突！", "error"); 
         let newSch = { id: Utils.uuid(), date: dateStr, timeSlot: src.timeSlot, pool: src.pool, amount: src.amount, paid: false, isMerged: src.isMerged || false, googleEventId: null };
-        if (src.isMerged && src.mergedStudents) {
-            newSch.mergedStudents = src.mergedStudents.map(ms => ({ studentId: ms.studentId, amount: ms.amount, paid: false })); 
-        } else {
-            newSch.studentId = src.studentId;
-        }
-        
-        this.store.state.schedules.push(newSch); 
-        this.store.save(true); 
-        Utils.showToast(`貼上成功！`, "success");
+        if (src.isMerged && src.mergedStudents) newSch.mergedStudents = src.mergedStudents.map(ms => ({ studentId: ms.studentId, amount: ms.amount, paid: false })); else newSch.studentId = src.studentId;
+        this.store.state.schedules.push(newSch); this.store.save(true); Utils.showToast(`貼上成功！`, "success");
         if (this.store.state.googleConnected) this.syncScheduleToGoogle(newSch);
       }
 
@@ -908,9 +669,7 @@ initGoogleAuthSDK() {
       updateCoachPasscode() {
         const val = document.getElementById('coach-passcode-field')?.value.trim();
         if (!val || val.length < 4) return Utils.showToast("⚠️ 密碼請至少設定 4 位數字！", "error");
-        this.store.state.coachPasscode = val;
-        this.store.save(true);
-        Utils.showToast("🔑 安全解鎖密碼更新成功！", "success");
+        this.store.state.coachPasscode = val; this.store.save(true); Utils.showToast("🔑 安全解鎖密碼更新成功！", "success");
       }
 
       buildSettingsView() {
@@ -945,16 +704,7 @@ initGoogleAuthSDK() {
         }
       }
 
-      submitStudent() { 
-          const n = document.getElementById('fs-name').value; 
-          if(n){ 
-              this.store.addStudent(n, document.getElementById('fs-rate').value, document.getElementById('fs-pool').value); 
-              this.closeModal(); 
-              this.render(); 
-          } else { 
-              Utils.showToast('學員姓名不得為空', 'error'); 
-          } 
-      }
+      submitStudent() { const n = document.getElementById('fs-name').value; if(n){ this.store.addStudent(n, document.getElementById('fs-rate').value, document.getElementById('fs-pool').value); this.closeModal(); this.render(); } else { Utils.showToast('學員姓名不得為空', 'error'); } }
 
       openEditStudentModal(id) {
         const st = this.store.state.students.find(s => s.id === id); if (!st) return;
@@ -966,26 +716,10 @@ initGoogleAuthSDK() {
         }
       }
 
-      submitEditStudent(id) { 
-          const n = document.getElementById('fe-name').value; 
-          if(n){ 
-              this.store.editStudent(id, n, document.getElementById('fe-rate').value, document.getElementById('fe-pool').value); 
-              this.closeModal(); 
-              this.render(); 
-          } else { 
-              Utils.showToast('學員姓名不得為空', 'error'); 
-          } 
-      }
+      submitEditStudent(id) { const n = document.getElementById('fe-name').value; if(n){ this.store.editStudent(id, n, document.getElementById('fe-rate').value, document.getElementById('fe-pool').value); this.closeModal(); this.render(); } else { Utils.showToast('學員姓名不得為空', 'error'); } }
 
-      openDeleteStudentConfirm(id) { 
-        const m = document.getElementById('modal-container');
-        if (m) { m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-6 shadow-2xl text-center"><h3 class="font-bold text-sm mb-4">確定刪除學員？</h3><div class="flex gap-3"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeDeleteStudent('${id}')" class="flex-1 py-3 bg-rose-600 text-white rounded-xl text-xs font-bold">刪除</button></div></div></div>`; Utils.renderIcons(); } 
-      }
-      
-      openDeleteScheduleConfirm(id) { 
-        const m = document.getElementById('modal-container');
-        if (m) { m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-6 shadow-2xl text-center"><h3 class="font-bold text-sm mb-4">確定移除此課堂？</h3><div class="flex gap-3"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeDeleteSchedule('${id}')" class="flex-1 py-3 bg-rose-600 text-white rounded-xl text-xs font-bold">刪除</button></div></div></div>`; Utils.renderIcons(); } 
-      }
+      openDeleteStudentConfirm(id) { const m = document.getElementById('modal-container'); if (m) { m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-6 shadow-2xl text-center"><h3 class="font-bold text-sm mb-4">確定刪除學員？</h3><div class="flex gap-3"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeDeleteStudent('${id}')" class="flex-1 py-3 bg-rose-600 text-white rounded-xl text-xs font-bold">刪除</button></div></div></div>`; Utils.renderIcons(); } }
+      openDeleteScheduleConfirm(id) { const m = document.getElementById('modal-container'); if (m) { m.innerHTML = `<div class="fixed inset-0 bg-slate-950/60 flex items-center justify-center p-4 z-[100]"><div class="bg-white rounded-3xl w-full max-w-xs p-6 shadow-2xl text-center"><h3 class="font-bold text-sm mb-4">確定移除此課堂？</h3><div class="flex gap-3"><button type="button" onclick="window.controller.closeModal()" class="flex-1 py-3 bg-slate-100 rounded-xl text-xs font-bold">取消</button><button type="button" onclick="window.controller.executeDeleteSchedule('${id}')" class="flex-1 py-3 bg-rose-600 text-white rounded-xl text-xs font-bold">刪除</button></div></div></div>`; Utils.renderIcons(); } }
 
       async exportReportPDF(reportType) {
         const hud = document.createElement('div');
@@ -1334,12 +1068,7 @@ initGoogleAuthSDK() {
         }
       }
       
-      selectPickerDate(y, m) { 
-        this.store.state.currYear = y; 
-        this.store.state.currMonth = m; 
-        this.store.setDate(`${y}-${String(m).padStart(2,'0')}-01`); 
-        this.closeModal(); 
-      }
+      selectPickerDate(y, m) { this.store.state.currYear = y; this.store.state.currMonth = m; this.store.setDate(`${y}-${String(m).padStart(2,'0')}-01`); this.closeModal(); }
 
       openRestConfigModal(dateStr) {
         const isFullRest = this.store.state.coachRestDays.includes(dateStr);
@@ -1416,9 +1145,7 @@ initGoogleAuthSDK() {
       }
 
       autoFillRateAndPool(stId) { const st = this.store.state.students.find(s => s.id === stId); if (st) { document.getElementById('f-amount').value = st.defaultRate; if (st.defaultPool) document.getElementById('f-pool').value = st.defaultPool; } }
-      
       applyTimeShortcut(ts) { const [s,e] = ts.split(' - '); document.getElementById('f-start-h').value = s.split(':')[0]; document.getElementById('f-start-m').value = s.split(':')[1]; document.getElementById('f-end-h').value = e.split(':')[0]; document.getElementById('f-end-m').value = e.split(':')[1]; }
-      
       syncEndTime() { const sh = parseInt(document.getElementById('f-start-h').value); document.getElementById('f-end-h').value = String((sh + 1) % 24).padStart(2, '0'); document.getElementById('f-end-m').value = document.getElementById('f-start-m').value; }
 
       submitSchedule() {
@@ -1471,16 +1198,11 @@ initGoogleAuthSDK() {
             sc++;
           }
           
-          if (rw > 1 && sc === 0) {
-            return Utils.showToast("⚠️ 排班失敗：所選的多週時段皆與現有排程衝突！", "error");
-          }
+          if (rw > 1 && sc === 0) { return Utils.showToast("⚠️ 排班失敗：所選的多週時段皆與現有排程衝突！", "error"); }
 
           this.closeModal();
           if (rw > 1) sc === rw ? Utils.showToast(`🎉 連續排課 ${sc} 週成功！`, "success") : Utils.showToast(`⚠️ 成功 ${sc} 週，跳過衝突 ${conflicts.length} 週`, "warning");
-        } catch (error) {
-          console.error("Schedule Submit Error:", error);
-          Utils.showToast("新增課堂時發生錯誤", "error");
-        }
+        } catch (error) { Utils.showToast("新增課堂時發生錯誤", "error"); }
       }
 
       openEditModal(schId) {
@@ -1508,10 +1230,7 @@ initGoogleAuthSDK() {
           
           this.store.save(true); this.closeModal(); Utils.showToast("修改完成！", "success");
           if (this.store.state.googleConnected) await this.syncEditToGoogle(sch);
-        } catch (error) {
-          console.error("Schedule Edit Error:", error);
-          Utils.showToast("修改課堂發生錯誤", "error");
-        }
+        } catch (error) { Utils.showToast("修改課堂發生錯誤", "error"); }
       }
     }
 
@@ -1520,9 +1239,6 @@ initGoogleAuthSDK() {
     window.db = window.db || new Database();
     window.controller = new AppController(window.db);
 
-    // ==========================================
-    // ☁️ Firebase 深度安全連線機制
-    // ==========================================
     const initFirebaseSync = async () => {
       const fbConfig = { 
         apiKey: "AIzaSyCxyqdWVZ02fNm-P77cdIDQ4n1eMxQYU6k", 
@@ -1628,9 +1344,7 @@ initGoogleAuthSDK() {
               window.db.setupSync(window.db.state.syncKey);
           }
         });
-      } catch (e) {
-          console.warn("Firebase Init Blocked (Maybe adblocker): ", e);
-      }
+      } catch (e) { console.warn("Firebase Init Blocked (Maybe adblocker): ", e); }
     };
     
     initFirebaseSync();
