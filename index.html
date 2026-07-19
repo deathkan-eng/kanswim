@@ -827,7 +827,7 @@
                   }
                   schBadgesHTML += `<div class="compact-badge mt-1.5 w-full ${pTheme.bg}"><div class="flex justify-between items-center w-full"><span class="font-black text-[9px]">${s.timeSlot.replace(' - ', '-')}</span><span class="${isAllPaid ? 'status-dot-paid' : 'status-dot-unpaid'} shrink-0"></span></div><div class="font-extrabold truncate w-full mt-0.5 text-[9px]">${displayName}</div></div>`;
                 } else {
-                  schBadgesHTML += `<div class="compact-badge mt-1.5 w-full bg-slate-100 border-slate-200 opacity-60"><div class="flex justify-between items-center w-full"><span class="text-slate-500 font-bold text-[9px]">${s.timeSlot.split(' - ')[0]} 🔒 已預約</span><span class="w-1.5 h-1.5 bg-slate-300 rounded-full shrink-0"></span></div></div>`;
+                  schBadgesHTML += `<div class="compact-badge mt-1.5 w-full bg-slate-100 border-slate-200 opacity-60"><div class="flex justify-between items-center w-full"><span class="text-slate-500 font-black text-[9px]">${s.timeSlot.replace(' - ', '-')}</span><span class="w-1.5 h-1.5 bg-slate-300 rounded-full shrink-0"></span></div><div class="font-bold truncate w-full mt-0.5 text-[9px] text-slate-400">${s.pool}</div></div>`;
                 }
               }
             });
@@ -881,7 +881,7 @@
               }
               listHTML += `<div class="detail-sch-card border-blue-200 bg-blue-50/50"><div class="flex gap-4 items-center"><div class="p-3 bg-blue-100 rounded-2xl text-blue-600"><i data-lucide="check-circle" class="w-6 h-6"></i></div><div class="flex-grow"><div class="font-extrabold text-blue-800 text-base">${detailTitle}</div><div class="text-xs mt-1 text-blue-600/80">${s.timeSlot} · ${s.pool}</div></div></div><div class="mt-4 pt-4 border-t border-blue-100 flex justify-between items-center"><span class="${isPaid ? 'badge-paid' : 'badge-unpaid'}">${isPaid ? '已付訖' : '待付款'}</span><span class="font-black text-blue-900">$${amt}</span></div></div>`;
             } else {
-              listHTML += `<div class="detail-sch-card opacity-50"><div class="flex gap-4 items-center"><div class="p-3 bg-slate-100 rounded-2xl text-slate-400"><i data-lucide="lock" class="w-6 h-6"></i></div><div class="flex-grow"><div class="font-extrabold text-slate-500 text-base">🔒 已預約時段</div><div class="text-xs mt-1 text-slate-400">${s.timeSlot.split(' - ')[0]} 開始</div></div></div></div>`;
+              listHTML += `<div class="detail-sch-card opacity-50"><div class="flex gap-4 items-center"><div class="p-3 bg-slate-100 rounded-2xl text-slate-400"><i data-lucide="lock" class="w-6 h-6"></i></div><div class="flex-grow"><div class="font-extrabold text-slate-500 text-base">已預約時段</div><div class="text-xs mt-1 text-slate-500 font-medium">${s.timeSlot} · ${s.pool}</div></div></div></div>`;
             }
           });
           detailsHTML = listHTML || `<div class="text-center py-8 text-slate-400 text-xs">本日無排班</div>`;
